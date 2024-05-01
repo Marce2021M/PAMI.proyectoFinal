@@ -1,0 +1,12 @@
+---
+title: "Clase Modelado 1"
+lang: es
+date: today
+format:
+  pdf:
+    latex_engine: xelatex
+nocite: |
+  @*
+---
+
+
