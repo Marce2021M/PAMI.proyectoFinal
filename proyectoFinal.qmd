@@ -10,3 +10,164 @@ nocite: |
 ---
 
 
+# Bases Técnicas, Estadísticas y Financieras
+
+## Supuestos
+
+a) Tipo de seguro:
+
+Es un seguro de daños materiales. Específicamente para instrumentos musicales.
+
+b) Cobertura
+
+La cobertura principal es daño parcial o total de instrumento por las siguientes causas:
+
+- Daño accidental (no por deterioro)
+- Robo(daño total)
+- Daños por ambiente
+
+c) Temporalidad
+
+1 año con renovación
+
+d) Población asegurada
+
+e) Suma asegurada de 100,000 (SA)
+
+Este límite aplica para todos los siniestros dentro del año.
+
+f) Gastos administrativos
+
+Solo consideramos gastos administrativos del 30% de la prima
+
+g) Deducibles, coaseguro y límites de asseguramiento
+
+El deducible es 0. 
+
+Coaseguro es 30% del siniestro.
+
+El límite de aseguramiento es 100,000 (SA).
+
+h) Modelo de siniestralidad
+Para modelar nuestra siniestralidad utilizamos el modelo de riesgos colectivo el cual considera siniestros homogéneos e independientes.
+Con lo cual representa la pérdida agrega de acuerdo con la siguiente fórmula:
+
+$$S = \sum_{k=1}^{N} \sum_{j=1}^{N_k}X_j$$
+
+donde
+
+- $S$ es la pérdida agregada
+- $N$ es el número de pólizas en la cartera
+- $N_k$ es el número de siniestros en la póliza $k$. Suponemos que $N_k$ sigue una distribución __ y en conjunto son vaiid.
+- $X_j$ es el monto del siniestro $j$ en la póliza $k$. Suponemos que $X_j$ sigue una distribución __ y en conjunto son vaiid.
+
+Por los supuestos vaiid este modelo se puede simplificar estadísticamente a:
+
+$$S = \sum_{j=1}^{M} X_j$$
+
+donde 
+
+- $M = \sum_{j=1}^{N} N_j$ es el número total de siniestros en la cartera. $M$ sigue una distribución __.
+- $X_j$ es el monto del siniestro $j$ en la cartera. Suponemos que $X_j$ sigue una distribución __ y en conjunto son vaiid.
+
+i) Prima de neta riesgo
+
+Con el modelo descrito anteriormente obtenemos la prima de neta de riesgo de la siguiente manera:
+
+$$P = \text{Var}_{.995}(S)(1+\alpha_{sop})(1+\alpha_{op})$$
+
+donde $\alpha_{op} = .1$ es el margen para cubrir riesgos operativos; y $\alpha_{sop}$ es el margen adicional para cubrir gastos administrativos, utiilidades, y un margen extra de seguridad.
+
+En este caso $\alpha_{sop} = \alpha_{ga} + \alpha_{ut} + \alpha_{seg} = .30$
+
+y tenemos que:
+- $\alpha_{ga} = .1$ es el margen para cubrir gastos administrativos.
+- $\alpha_{ut} = .05$ es el margen para cubrir utilidades.
+- $\alpha_{seg} = .05$ es el margen para cubrir rango de seguridad.
+
+Para obtener la prima de neta de riesgo individual calculamos:
+
+$$P_{\text{Ind}} = \frac{P}{N}$$
+
+donde $N$ es el número de pólizas en la cartera.
+
+k) RCS
+
+Por nuestro modelo interno de riesgos aprobados por la comisión el RCS se calcula de la siguiente manera:
+
+$$RCS = (\text{Var}_{.995}(S) - \text{Var}_{.5}(S))+\text{Var}_{.995}(S)(1+\alpha_{op}) = N*P*\left(\frac{1}{(1+\alpha_{sop})}+\frac{}{(1+\alpha_{sop})(1+\alpha_{sop})}\right)$$
+
+j) Reservas de RRC y OPC
+
+RRC
+
+Reservaremos todo el porcentaje de la prima que corresponde a la prima de riesgo los gastos administrativos. Esto se representa con la siguiente fórmula:
+
+
+
+OPC
+
+
+
+
+
+Como tenemos modelo interno aprobado, la RCS
+
+l) Dividendos
+No existen dividendos.
+
+m) Valores garantizados.
+No existen valores garantizados.
+
+n) Otros aspectos técnicos relevantes.
+No existen otros aspectos técnicos relevantes.
+
+## Ajustes
+### Ajuste de la distribución de siniestros
+
+Para ajustar la distribución de los siniestros totales utilizamos los siguientes datos, extraídos de ___ . Consideramos las 
+siguientes distribuciones:
+
+-
+-
+-
+
+```{r}
+
+```
+
+En las métricas que utilizamos para elegir la distribución que mejor se ajusta a los datos, obtuvimos los siguientes resultados:
+
+```{r}
+
+```
+
+Por lo que elegimos la distribución ___ para ajustar los siniestros totales.
+
+#### Validaciones
+
+### Ajuste de la distribución del monto de siniestros
+
+Para ajustar la distribución de montos por siniestro utilizamos los siguientes datos, extraídos de ___ . Consideramos las 
+siguientes distribuciones:
+-
+-
+-
+
+```{r}
+
+```
+
+En las métricas que utilizamos para elegir la distribución que mejor se ajusta a los datos, obtuvimos los siguientes resultados:
+
+```{r}
+
+```
+
+Por lo que elegimos la distribución ___ para ajustar los siniestros totales.
+
+#### Validaciones
+
+
+
+## Resultados
