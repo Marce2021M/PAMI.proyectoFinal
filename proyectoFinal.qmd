@@ -22,7 +22,7 @@ b) Cobertura
 
 La cobertura principal es daño parcial o total de instrumento por las siguientes causas:
 
-- Daño accidental (no por deterioro)
+- Daños accidentales
 - Robo(daño total)
 - Daños por ambiente
 
@@ -31,6 +31,8 @@ c) Temporalidad
 1 año con renovación
 
 d) Población asegurada
+
+Instrumentos musicales con valor de más de $1,000.
 
 e) Suma asegurada de 100,000 (SA)
 
@@ -171,3 +173,214 @@ Por lo que elegimos la distribución ___ para ajustar los siniestros totales.
 
 
 ## Resultados
+
+
+
+# Modelos
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(purrr)
+library(MASS)
+library(fitdistrplus)
+
+library(actuar)
+
+
+# Datos
+# Los que no son 10,000-50,000
+frec1Datos <- data.frame(
+  incidencia = c('0-1', '2-3','4-5'),
+  frecuencia = c(15, 2, 1)
+)
+
+frec2Datos <- data.frame(
+  incidencia = c('0-1', '2-3','4-5'),
+  frecuencia = c(17, 1, 0)
+)
+
+sev1Datos <- data.frame(
+  monto = c('0-1000', '1000-3000','3000-5000','5000-10000', '+10000'),
+  frecuencia = c(3, 2, 0, 0, 0)
+)
+
+sev2Datos <- data.frame(
+  monto = c('0-1000', '1000-3000','3000-5000','5000-10000', '+10000'),
+  frecuencia = c(16, 0, 0, 0, 1)
+)
+
+sev3Datos <- data.frame(
+  monto = c('0-1000', '1000-3000','3000-5000','5000-10000', '+10000'),
+  frecuencia = c(23, 12, 1, 3, 2)
+)
+
+sev4Datos <- data.frame(
+  monto = c('0-1000', '1000-3000','3000-5000','5000-10000', '+10000'),
+  frecuencia = c(2, 4, 1, 1, 3)
+)
+
+```
+
+## Modelos de frecuencia
+
+### Binomial negativa
+
+para encontrar los estimadores de máxima verosimilitud debemos satisfacer la siguiente ecuación:
+
+$$\sum_{i=1}^{n} \psi(x_{i}+r)-n\psi(r)-n\ln\left(1+\frac{\bar{x}}{r}\right)=0$$
+
+
+```{r}
+
+funObj <- function(x) {
+  sum(digamma(datos_largos$value + x)) - 
+  nrow(datos_largos)*digamma(x) - nrow(datos_largos)*log(1 + mean(datos_largos$value)/x)
+}
+
+# Resolvemos la ecuación
+
+rRoot <- uniroot(funObj, c(1, 100))$root
+beta <- mean(datos_largos$value)/rRoot
+```
+
+
+### Modificadas en cero
+
+
+
+### Poisson
+
+Para encontrar los estimadores de máxima verosimilitud debemos satisfacer la siguiente ecuación:
+
+```{r}
+
+```
+
+
+## Modelos de severidad
+
+
+```{r}
+# Suponiendo un valor representativo para cada intervalo (por ejemplo, el punto medio)
+montos <- c(500, 2000, 4000, 7500, 15000)  # Puntos medios aproximados de los rangos
+
+# Replicando los montos según la frecuencia para ajustar las distribuciones
+datos1 <- rep(montos, sev1Datos$frecuencia)
+datos2 <- rep(montos, sev2Datos$frecuencia)
+datos3 <- rep(montos, sev3Datos$frecuencia)
+datos4 <- rep(montos, sev4Datos$frecuencia)
+
+# Ajustando una distribución Weibull
+fit_weibull <- fitdist(datos1, "weibull")
+summary(fit_weibull)
+
+# Ajustando una distribución Log-normal
+fit_lnorm <- fitdist(datos1, "lnorm")
+summary(fit_lnorm)
+
+# Ajustando una distribución Gamma
+fit_gamma <- fitdist(datos1, "gamma")
+summary(fit_gamma)
+
+# Ajustando una distribución Pareto
+# Necesitamos establecer un umbral mínimo (límite inferior para Pareto), usaremos el mínimo no cero
+fit_pareto <- fitdist(datos1, "pareto", start = list(shape = 1, scale = min(datos1[datos1 > 0])))
+summary(fit_pareto)
+```
+
+```{r}
+# Función para calcular frecuencias esperadas y realizar prueba chi-cuadrado
+perform_chi_square_test <- function(fit, dist_name, limits, observed_freq) {
+  if (dist_name == "pareto") {
+    p <- ppareto(limits, shape=fit$estimate["shape"], scale=fit$estimate["scale"])
+  } else if (dist_name == "weibull") {
+    p <- pweibull(limits, shape=fit$estimate["shape"], scale=fit$estimate["scale"])
+  } else if (dist_name == "lnorm") {
+    p <- plnorm(limits, meanlog=fit$estimate["meanlog"], sdlog=fit$estimate["sdlog"])
+  } else if (dist_name == "gamma") {
+    p <- pgamma(limits, shape=fit$estimate["shape"], scale=fit$estimate["scale"])
+  }
+
+  p_diff <- diff(c(0, p))
+
+  if (any(is.na(p_diff)) || any(p_diff < 0)) {
+    return(list(expected_freq = NA, test = "Probabilities calculation failed"))
+  }
+
+  expected_freq <- p_diff * sum(observed_freq)
+  
+  # Prueba chi-cuadrado
+  if (any(expected_freq < 5)) {
+    warning("Expected frequencies are too low for a reliable chi-squared test")
+    test_result <- "Chi-squared test not reliable"
+  } else {
+    test_result <- chisq.test(x = observed_freq, p = p_diff, rescale.p = TRUE)
+  }
+  
+  return(list(expected_freq = expected_freq, test = test_result))
+}
+
+# Realizar pruebas para cada distribución
+chi_weibull <- perform_chi_square_test(fit_weibull, "weibull", limites, sev1Datos$frecuencia)
+chi_pareto <- perform_chi_square_test(fit_pareto, "pareto", limites, sev1Datos$frecuencia)
+chi_lnorm <- perform_chi_square_test(fit_lnorm, "lnorm", limites, sev1Datos$frecuencia)
+chi_gamma <- perform_chi_square_test(fit_gamma, "gamma", limites, sev1Datos$frecuencia)
+
+# Mostrar los resultados de las pruebas
+list(weibull = chi_weibull$test, pareto = chi_pareto$test, lnorm = chi_lnorm$test, gamma = chi_gamma$test)
+
+```
+
+```{r}
+# Función para generar gráficas
+plot_distribution_fit <- function(fit, data, main_title) {
+  df <- data.frame(val = data)
+  ggplot(df, aes(x = val)) +
+    geom_histogram(aes(y = ..density..), binwidth = 1000, colour = "black", fill = "white") +
+    stat_function(fun = fit$distr, args = as.list(fit$estimate), colour = "blue") +
+    ggtitle(main_title) +
+    theme_minimal()
+}
+
+# Crear gráficas para cada ajuste
+p_weibull <- plot_distribution_fit(fit_weibull, datos1, "Ajuste Weibull")
+p_pareto <- plot_distribution_fit(fit_pareto, datos1, "Ajuste Pareto")
+p_lnorm <- plot_distribution_fit(fit_lnorm, datos1, "Ajuste Log-Normal")
+p_gamma <- plot_distribution_fit(fit_gamma, datos1, "Ajuste Gamma")
+
+# Mostrar las gráficas
+print(p_weibull)
+print(p_pareto)
+print(p_lnorm)
+print(p_gamma)
+```
+
+### Gamma
+
+Para encontrar los estimadores de máxima verosimilitud debemos satisfacer la siguiente ecuación:
+
+```{r}
+
+```
+
+### Lognormal
+
+```{r}
+
+```
+
+
+### Weibull
+
+
+
+
+### Pareto
+
+
+
+
+
+
+
