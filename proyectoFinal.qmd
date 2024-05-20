@@ -187,196 +187,382 @@ library(fitdistrplus)
 
 library(actuar)
 
-
 # Datos
 # Los que no son 10,000-50,000
-frec1Datos <- data.frame(
-  incidencia = c('0-1', '2-3','4-5'),
-  frecuencia = c(15, 2, 1)
+# Crear un dataframe con la severidad de los siniestros
+sevDatos <- data.frame(
+  Rango = c("0-1000", "1000-3000", "3000-5000", "5000-10000", "+10000"),
+  Frecuencia = c(79, 37, 4, 6, 7)
 )
 
-frec2Datos <- data.frame(
-  incidencia = c('0-1', '2-3','4-5'),
-  frecuencia = c(17, 1, 0)
+frecDatos <- data.frame(
+  Rango = c("0--1", "2--3", "3--4"),
+  Completa = c(56, 12, 2)
 )
 
-sev1Datos <- data.frame(
-  monto = c('0-1000', '1000-3000','3000-5000','5000-10000', '+10000'),
-  frecuencia = c(3, 2, 0, 0, 0)
-)
-
-sev2Datos <- data.frame(
-  monto = c('0-1000', '1000-3000','3000-5000','5000-10000', '+10000'),
-  frecuencia = c(16, 0, 0, 0, 1)
-)
-
-sev3Datos <- data.frame(
-  monto = c('0-1000', '1000-3000','3000-5000','5000-10000', '+10000'),
-  frecuencia = c(23, 12, 1, 3, 2)
-)
-
-sev4Datos <- data.frame(
-  monto = c('0-1000', '1000-3000','3000-5000','5000-10000', '+10000'),
-  frecuencia = c(2, 4, 1, 1, 3)
-)
 
 ```
 
 ## Modelos de frecuencia
 
-### Binomial negativa
-
-para encontrar los estimadores de máxima verosimilitud debemos satisfacer la siguiente ecuación:
-
-$$\sum_{i=1}^{n} \psi(x_{i}+r)-n\psi(r)-n\ln\left(1+\frac{\bar{x}}{r}\right)=0$$
-
-
 ```{r}
+library(stats4)
+# Definir los límites de los intervalos
+intervalos <- list(c(-1, 1), c(1, 3), c(3,4))
 
-funObj <- function(x) {
-  sum(digamma(datos_largos$value + x)) - 
-  nrow(datos_largos)*digamma(x) - nrow(datos_largos)*log(1 + mean(datos_largos$value)/x)
+# Crear una función de log-verosimilitud para la distribución de Poisson
+logverosimilitud_poisson <- function(lambda) {
+  result <- -sum(sapply(1:nrow(frecDatos), function(i) {
+    frecDatos$Completa[i] * log(ppois(intervalos[[i]][2], lambda)-ppois(intervalos[[i]][1], lambda))
+  }))
+  return(result)
 }
 
-# Resolvemos la ecuación
+# Crear una función de log-verosimilitud para la distribución binomial negativa
+logverosimilitud_negbin <- function(par) {
+  size <- par[1]
+  mu <- par[2]
+  result <- -sum(sapply(1:nrow(frecDatos), function(i) {
+    frecDatos$Completa[i] *log(pnbinom(intervalos[[i]][2], size = size, mu = mu)-pnbinom(intervalos[[i]][1], size = size, mu = mu))
+  }))
+  return(result)
+}
 
-rRoot <- uniroot(funObj, c(1, 100))$root
-beta <- mean(datos_largos$value)/rRoot
+
+# Ajuste a la distribución de Poisson
+ajuste_poisson <- optimize(interval = c(.2,10), f = logverosimilitud_poisson)
+lambda_poisson <- ajuste_poisson$minimum
+
+# Ajuste a la distribución binomial negativa
+ajuste_negbin <- optim(par = c(1, 1), fn = logverosimilitud_negbin)
+size_negbin <- ajuste_negbin$par[1]
+mu_negbin <- ajuste_negbin$par[2]
+
 ```
 
+```{r}
+# AIC()
 
-### Modificadas en cero
+# AIC para Poisson
+AIC_poisson <- 2 * logverosimilitud_poisson(lambda_poisson) + 2
 
-
-
-### Poisson
-
-Para encontrar los estimadores de máxima verosimilitud debemos satisfacer la siguiente ecuación:
+# AIC para binomial negativa
+AIC_negbin <- 2 * logverosimilitud_negbin(c(size_negbin, mu_negbin)) + 4
+```
 
 ```{r}
+
+# Prueba de chi-cuadrado
+observados <- frecDatos$Completa
+
+# Esperados para Poisson
+esperados_poisson <- sapply(1:nrow(frecDatos), function(i) {
+  (ppois(intervalos[[i]][2], lambda_poisson)-ppois(intervalos[[i]][1], lambda_poisson))*sum(observados)
+})
+
+
+# Esperados para binomial negativa
+esperados_negbin <- sapply(1:nrow(frecDatos), function(i) {
+  (pnbinom(intervalos[[i]][2], size = size_negbin, mu = mu_negbin)-pnbinom(intervalos[[i]][1], size = size_negbin, mu = mu_negbin))*sum(observados)
+})
+
+
+
+# Chi-cuadrado para Poisson
+chisq_poisson <- sum((observados - esperados_poisson)^2 / esperados_poisson)
+p_val_poisson <- pchisq(chisq_poisson, df = nrow(frecDatos) - 1, lower.tail = FALSE)
+
+# Chi-cuadrado para binomial negativa
+chisq_negbin <- sum((observados - esperados_negbin)^2 / esperados_negbin)
+p_val_negbin <- pchisq(chisq_negbin, df = nrow(frecDatos)- 2, lower.tail = FALSE)
+
+# Resultados de la prueba de chi-cuadrado
+cat("Chi-cuadrado para Poisson:", chisq_poisson, "p-value:", p_val_poisson, "\n")
+cat("Chi-cuadrado para Binomial Negativa:", chisq_negbin, "p-value:", p_val_negbin, "\n")
+```
+
+```{r}
+# Gráfica de ajuste
+library(ggplot2)
 
 ```
 
 
 ## Modelos de severidad
 
-
 ```{r}
-# Suponiendo un valor representativo para cada intervalo (por ejemplo, el punto medio)
-montos <- c(500, 2000, 4000, 7500, 15000)  # Puntos medios aproximados de los rangos
-
-# Replicando los montos según la frecuencia para ajustar las distribuciones
-datos1 <- rep(montos, sev1Datos$frecuencia)
-datos2 <- rep(montos, sev2Datos$frecuencia)
-datos3 <- rep(montos, sev3Datos$frecuencia)
-datos4 <- rep(montos, sev4Datos$frecuencia)
-
-# Ajustando una distribución Weibull
-fit_weibull <- fitdist(datos1, "weibull")
-summary(fit_weibull)
-
-# Ajustando una distribución Log-normal
-fit_lnorm <- fitdist(datos1, "lnorm")
-summary(fit_lnorm)
-
-# Ajustando una distribución Gamma
-fit_gamma <- fitdist(datos1, "gamma")
-summary(fit_gamma)
-
-# Ajustando una distribución Pareto
-# Necesitamos establecer un umbral mínimo (límite inferior para Pareto), usaremos el mínimo no cero
-fit_pareto <- fitdist(datos1, "pareto", start = list(shape = 1, scale = min(datos1[datos1 > 0])))
-summary(fit_pareto)
-```
-
-```{r}
-# Función para calcular frecuencias esperadas y realizar prueba chi-cuadrado
-perform_chi_square_test <- function(fit, dist_name, limits, observed_freq) {
-  if (dist_name == "pareto") {
-    p <- ppareto(limits, shape=fit$estimate["shape"], scale=fit$estimate["scale"])
-  } else if (dist_name == "weibull") {
-    p <- pweibull(limits, shape=fit$estimate["shape"], scale=fit$estimate["scale"])
-  } else if (dist_name == "lnorm") {
-    p <- plnorm(limits, meanlog=fit$estimate["meanlog"], sdlog=fit$estimate["sdlog"])
-  } else if (dist_name == "gamma") {
-    p <- pgamma(limits, shape=fit$estimate["shape"], scale=fit$estimate["scale"])
-  }
-
-  p_diff <- diff(c(0, p))
-
-  if (any(is.na(p_diff)) || any(p_diff < 0)) {
-    return(list(expected_freq = NA, test = "Probabilities calculation failed"))
-  }
-
-  expected_freq <- p_diff * sum(observed_freq)
-  
-  # Prueba chi-cuadrado
-  if (any(expected_freq < 5)) {
-    warning("Expected frequencies are too low for a reliable chi-squared test")
-    test_result <- "Chi-squared test not reliable"
+# Cargar el paquete readxl
+library(readxl)
+mydata <- read_excel("instrumentos.xlsx", sheet = "data")
+# Definir una función para calcular el valor intermedio
+calcular_intermedio <- function(rango) {
+  if (grepl("más de", rango)) {
+    lower <- as.numeric(gsub("[^0-9]", "", rango))
+    upper <- NA
+    intermedio <- lower * 1.5  # Asumimos un incremento del 50% como valor intermedio
   } else {
-    test_result <- chisq.test(x = observed_freq, p = p_diff, rescale.p = TRUE)
+    nums <- as.numeric(unlist(regmatches(rango, gregexpr("[0-9]+", rango))))
+    lower <- nums[1]
+    upper <- nums[2]
+    intermedio <- mean(c(lower, upper))
   }
-  
-  return(list(expected_freq = expected_freq, test = test_result))
+  return(intermedio)
+}
+# Aplicar la función a los datos
+mydata$Intermedio <- sapply(mydata$"¿Cuánto cuesta tu instrumento?", calcular_intermedio)
+
+listaSeveridad <- c()
+listaMedioSiniestros <- c("500_siniestros" = 500,
+                          "2000_siniestros" = 2000, 
+                          "4000_siniestros" = 4000, 
+                          "7500_siniestros" = 7500, 
+                          "12000_siniestros" = 12000)
+# Modificamos la lista
+mydata <- mydata |> 
+  filter(Intermedio>500)
+mean(mydata$Intermedio)
+```
+
+```{r}
+
+# Bucle para calcular y agregar valores a listaSeveridad
+for (i in 1:nrow(mydata)) {
+  for (j in c("2000_siniestros", "4000_siniestros", "7500_siniestros", "12000_siniestros")) {
+    # Calcular la cantidad a repetir
+    cantidad_a_repetir <- mydata[i, j]
+    # Calcular el valor a agregar
+    valor_a_agregar <- listaMedioSiniestros[j] / mydata$Intermedio[i]
+    if (valor_a_agregar>1){
+      valor_a_agregar <- 1
+    }
+    # Agregar los valores a listaSeveridad
+    listaSeveridad <- c(listaSeveridad, rep(valor_a_agregar, cantidad_a_repetir))
+  }
 }
 
-# Realizar pruebas para cada distribución
-chi_weibull <- perform_chi_square_test(fit_weibull, "weibull", limites, sev1Datos$frecuencia)
-chi_pareto <- perform_chi_square_test(fit_pareto, "pareto", limites, sev1Datos$frecuencia)
-chi_lnorm <- perform_chi_square_test(fit_lnorm, "lnorm", limites, sev1Datos$frecuencia)
-chi_gamma <- perform_chi_square_test(fit_gamma, "gamma", limites, sev1Datos$frecuencia)
+names(listaSeveridad) <- NULL
+# Transformar valores de 0 y 1 ligeramente para que estén en el intervalo (0, 1)
+eps <- .Machine$double.eps
+listaSeveridad[listaSeveridad == 0] <- 3*eps
+listaSeveridad[listaSeveridad == 1] <- 1 - 3*eps
+# Ajustar una distribución Beta a los datos
+fit_beta <- fitdist(listaSeveridad, "beta", method = "mle")
 
-# Mostrar los resultados de las pruebas
-list(weibull = chi_weibull$test, pareto = chi_pareto$test, lnorm = chi_lnorm$test, gamma = chi_gamma$test)
-
-```
-
-```{r}
-# Función para generar gráficas
-plot_distribution_fit <- function(fit, data, main_title) {
-  df <- data.frame(val = data)
-  ggplot(df, aes(x = val)) +
-    geom_histogram(aes(y = ..density..), binwidth = 1000, colour = "black", fill = "white") +
-    stat_function(fun = fit$distr, args = as.list(fit$estimate), colour = "blue") +
-    ggtitle(main_title) +
-    theme_minimal()
+logverosimilitud_beta <- function(par) {
+  shape1 <- par[1]
+  shape2 <- par[2]
+  result <- -sum(sapply(listaSeveridad, function(x) {
+    -log(dbeta(x, shape1, shape2)
+  }))
+  return(result)
 }
 
-# Crear gráficas para cada ajuste
-p_weibull <- plot_distribution_fit(fit_weibull, datos1, "Ajuste Weibull")
-p_pareto <- plot_distribution_fit(fit_pareto, datos1, "Ajuste Pareto")
-p_lnorm <- plot_distribution_fit(fit_lnorm, datos1, "Ajuste Log-Normal")
-p_gamma <- plot_distribution_fit(fit_gamma, datos1, "Ajuste Gamma")
+# Ajustar la distribución Beta
+ajuste_beta <- optim(par = c(.3,.5), fn = logverosimilitud_beta)
 
-# Mostrar las gráficas
-print(p_weibull)
-print(p_pareto)
-print(p_lnorm)
-print(p_gamma)
+# Mostrar el resumen del ajuste
+summary(fit_beta)
+
+# Graficar el ajuste
+plot(fit_beta)
+
 ```
 
-### Gamma
+## Modelos de siniestralidad
 
-Para encontrar los estimadores de máxima verosimilitud debemos satisfacer la siguiente ecuación:
+
+```{r}
+library(fitdistrplus)
+library(ggplot2)
+library(extraDistr)
+deducible <- 1000
+sevDatos <- sevDatos |> 
+  filter(Rango != "0-1000")
+
+# Definir los límites de los rangos
+limites <- list( c(1000, 3000), c(3000, 5000), c(5000, 10000), c(10000, 100000))
+
+# Función de log-verosimilitud para la distribución Weibull
+logverosimilitud_weibull <- function(par) {
+  shape <- par[1]
+  scale <- par[2]
+  result <- -sum(sapply(1:nrow(sevDatos), function(i) {
+    sevDatos$Frecuencia[i] * log(pweibull(limites[[i]][2], shape, scale) - pweibull(limites[[i]][1], shape, scale))
+  }))+sum(sevDatos$Frecuencia)*log(pweibull(deducible, shape, scale, lower.tail = FALSE))
+  return(result)
+} # empezar con c(1, 1000)
+
+
+# Función de log-verosimilitud para la distribución Gamma
+logverosimilitud_gamma <- function(par) {
+  shape <- par[1]
+  rate <- par[2]
+  result <- -sum(sapply(1:nrow(sevDatos), function(i) {
+    sevDatos$Frecuencia[i] * log(pgamma(limites[[i]][2], shape, scale = rate) - pgamma(limites[[i]][1], shape, scale = rate))
+  }))+sum(sevDatos$Frecuencia)*log(pgamma(deducible, shape, scale = rate, lower.tail = FALSE))
+  return(result)
+}
+
+# Función de log-verosimilitud para la distribución Lognormal
+logverosimilitud_lognormal <- function(par) {
+  meanlog <- par[1]
+  sdlog <- par[2]
+  result <- -sum(sapply(1:nrow(sevDatos), function(i) {
+    sevDatos$Frecuencia[i] * log(plnorm(log(limites[[i]][2]), meanlog, sdlog) - plnorm(log(limites[[i]][1]), meanlog, sdlog))
+  })) + sum(sevDatos$Frecuencia)*log(plnorm(log(deducible), meanlog, sdlog, lower.tail = FALSE))
+  return(result)
+}
+
+# Función de log-verosimilitud para la distribución Pareto
+logverosimilitud_pareto <- function(par) {
+  shape <- par[1]
+  scale <- par[2]
+  result <- -sum(sapply(1:nrow(sevDatos), function(i) {
+    sevDatos$Frecuencia[i] * log(ppareto(limites[[i]][2], shape, scale) - ppareto(limites[[i]][1], shape, scale))
+  }))+sum(sevDatos$Frecuencia)*log(ppareto(deducible, shape, scale, lower.tail = FALSE))
+  return(result)
+}
+# Ajustar las distribuciones utilizando optimización
+ajustar_distribucion <- function(logverosimilitud, start_params) {
+  fit <- optim(start_params, logverosimilitud)
+  return(fit)
+}
+
+# Ajustar las distribuciones
+params_weibull <- ajustar_distribucion(logverosimilitud_weibull, start_params = c(1, 1000))
+params_gamma <- ajustar_distribucion(logverosimilitud_gamma, start_params = c(10, 1000))
+params_lognormal <- ajustar_distribucion(logverosimilitud_lognormal, start_params = c(1, 1))
+params_pareto <- ajustar_distribucion(logverosimilitud_pareto, start_params = c(10, 1000))
+
+# Calcular AIC
+AIC_weibull <- 2 * logverosimilitud_weibull(params_weibull$par) + 4
+AIC_gamma <- 2 * logverosimilitud_gamma(params_gamma$par) + 4
+AIC_lognormal <- 2 * logverosimilitud_lognormal(params_lognormal$par) + 4
+AIC_pareto <- 2 * logverosimilitud_pareto(params_pareto$par) + 4
+
+# Prueba de chi-cuadrada
+
+# Calcular las frecuencias esperadas para cada distribución
+calcular_frecuencias_esperadas <- function(distribucion, params, limites, total_observaciones) {
+  p <- sapply(1:length(limites), function(i) {
+    if (distribucion == "weibull") {
+      return((pweibull(limites[[i]][2], params$par[1], params$par[2]) - 
+              pweibull(limites[[i]][1], params$par[1], params$par[2])) / 
+              (1 - pweibull(deducible, params$par[1], params$par[2])))
+    } else if (distribucion == "gamma") {
+      return((pgamma(limites[[i]][2], params$par[1], rate = params$par[2]) - 
+              pgamma(limites[[i]][1], params$par[1], rate = params$par[2])) / 
+              (1 - pgamma(deducible, params$par[1], rate = params$par[2])))
+    } else if (distribucion == "lognormal") {
+      return((plnorm(log(limites[[i]][2]), params$par[1], params$par[2]) - 
+              plnorm(log(limites[[i]][1]), params$par[1], params$par[2])) / 
+              (1 - plnorm(log(deducible), params$par[1], params$par[2])))
+    } else if (distribucion == "pareto") {
+      return((ppareto(limites[[i]][2], params$par[1], params$par[2]) - 
+              ppareto(limites[[i]][1], params$par[1], params$par[2])) / 
+              (1 - ppareto(deducible, params$par[1], params$par[2])))
+    } else {
+      stop("Distribución no soportada")
+    }
+  })
+  return(p * total_observaciones)
+}
+
+
+total_observaciones <- sum(sevDatos$Frecuencia)
+
+expected_weibull <- calcular_frecuencias_esperadas("weibull", params_weibull, limites, total_observaciones)
+expected_gamma <- calcular_frecuencias_esperadas("gamma", params_gamma, limites, total_observaciones)
+expected_lognormal <- calcular_frecuencias_esperadas("lognormal", params_lognormal, limites, total_observaciones)
+expected_pareto <- calcular_frecuencias_esperadas("pareto", params_pareto, limites, total_observaciones)
+
+# Realizar la prueba chi cuadrado para cada distribución
+observed <- sevDatos$Frecuencia
+
+chisq_test_weibull <- chisq.test(x = observed, p = expected_weibull / sum(expected_weibull), rescale.p = TRUE)
+chisq_test_gamma <- chisq.test(x = observed, p = expected_gamma / sum(expected_gamma), rescale.p = TRUE)
+chisq_test_lognormal <- chisq.test(x = observed, p = expected_lognormal / sum(expected_lognormal), rescale.p = TRUE)
+chisq_test_pareto <- chisq.test(x = observed, p = expected_pareto / sum(expected_pareto), rescale.p = TRUE)
+
+# Mostrar los resultados de las pruebas chi cuadrado
+print(chisq_test_weibull)
+print(chisq_test_gamma)
+print(chisq_test_lognormal)
+print(chisq_test_pareto)
+
+
+# Crear un data frame con las frecuencias observadas y esperadas
+comparacion <- data.frame(
+  Rango = rep(sevDatos$Rango, 5),
+  Frecuencia = c(sevDatos$Frecuencia, expected_weibull, expected_gamma, expected_lognormal, expected_pareto),
+  Tipo = rep(c("Observada", "Weibull", "Gamma", "Lognormal", "Pareto"), each = nrow(sevDatos))
+)
+
+# Graficar las frecuencias observadas y esperadas
+ggplot(comparacion, aes(x = Rango, y = Frecuencia, fill = Tipo)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(title = "Comparación de Frecuencias Observadas y Esperadas",
+       x = "Rango",
+       y = "Frecuencia",
+       fill = "Distribución") +
+  theme_minimal() +
+  scale_fill_manual(values = c("Observada" = "black", "Weibull" = "blue", "Gamma" = "red", "Lognormal" = "green", "Pareto" = "purple"))
+
+x_values <- seq(0, 6000, length.out = 1000)
+# Calcular las densidades para las distribuciones Pareto y Lognormal
+density_pareto <- dpareto(x_values, params_pareto$par[1], params_pareto$par[2])
+density_lognormal <- dlnorm(x_values, params_lognormal$par[1], params_lognormal$par[2])
+
+# Crear un data frame para las densidades
+density_data <- data.frame(
+  x_values = rep(x_values, 2),
+  Density = c(density_pareto, density_lognormal),
+  Distribucion = rep(c("Pareto", "Lognormal"), each = length(x_values))
+)
+
+# Graficar las densidades de Pareto y Lognormal
+ggplot(density_data, aes(x = x_values, y = Density, color = Distribucion)) +
+  geom_line(size = 1) +
+  labs(title = "Densidades Ajustadas de las Distribuciones Pareto y Lognormal",
+       x = "Valores",
+       y = "Densidad",
+       color = "Distribución") +
+  theme_minimal() +
+  scale_color_manual(values = c("Pareto" = "purple", "Lognormal" = "green"))
+
+
+```
+
+
+
+## Pareto
+
+```{r}
+esperanza_pareto <-  params_pareto$par[2] / (params_pareto$par[1] - 1)
+
+severidad <- esperanza_pareto/mean(unique(mydata$Intermedio))
+
+
+```
+
+## Lognormal
+
+```{r}
+esperanza_lognormal <- exp(params_lognormal$par[1] + params_lognormal$par[2]^2/2)
+
+severidad <- exp(esperanza_lognormal)/mean(unique(mydata$Intermedio))
+
+```
+
+## Weibull
 
 ```{r}
 
-```
+esperanza_weibull <- params_weibull$par[2] * gamma(1 + 1/params_weibull$par[1])
 
-### Lognormal
-
-```{r}
+severidad <- esperanza_weibull/mean(unique(mydata$Intermedio))
 
 ```
-
-
-### Weibull
-
-
-
-
-### Pareto
 
 
 
