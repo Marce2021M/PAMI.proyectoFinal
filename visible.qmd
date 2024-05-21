@@ -9,173 +9,6 @@ nocite: |
   @*
 ---
 
-
-# Bases Técnicas, Estadísticas y Financieras
-
-## Supuestos
-
-a) Tipo de seguro:
-
-Es un seguro de daños materiales. Específicamente para instrumentos musicales.
-
-b) Cobertura
-
-La cobertura principal es daño parcial o total de instrumento por las siguientes causas:
-
-- Daños accidentales
-- Robo(daño total)
-- Daños por ambiente
-
-c) Temporalidad
-
-1 año con renovación
-
-d) Población asegurada
-
-Instrumentos musicales con valor de más de $1,000.
-
-e) Suma asegurada de 100,000 (SA)
-
-Este límite aplica para todos los siniestros dentro del año.
-
-f) Gastos administrativos
-
-Solo consideramos gastos administrativos del 30% de la prima
-
-g) Deducibles, coaseguro y límites de asseguramiento
-
-El deducible es 0. 
-
-Coaseguro es 30% del siniestro.
-
-El límite de aseguramiento es 100,000 (SA).
-
-h) Modelo de siniestralidad
-Para modelar nuestra siniestralidad utilizamos el modelo de riesgos colectivo el cual considera siniestros homogéneos e independientes.
-Con lo cual representa la pérdida agrega de acuerdo con la siguiente fórmula:
-
-$$S = \sum_{k=1}^{N} \sum_{j=1}^{N_k}X_j$$
-
-donde
-
-- $S$ es la pérdida agregada
-- $N$ es el número de pólizas en la cartera
-- $N_k$ es el número de siniestros en la póliza $k$. Suponemos que $N_k$ sigue una distribución __ y en conjunto son vaiid.
-- $X_j$ es el monto del siniestro $j$ en la póliza $k$. Suponemos que $X_j$ sigue una distribución __ y en conjunto son vaiid.
-
-Por los supuestos vaiid este modelo se puede simplificar estadísticamente a:
-
-$$S = \sum_{j=1}^{M} X_j$$
-
-donde 
-
-- $M = \sum_{j=1}^{N} N_j$ es el número total de siniestros en la cartera. $M$ sigue una distribución __.
-- $X_j$ es el monto del siniestro $j$ en la cartera. Suponemos que $X_j$ sigue una distribución __ y en conjunto son vaiid.
-
-i) Prima de neta riesgo
-
-Con el modelo descrito anteriormente obtenemos la prima de neta de riesgo de la siguiente manera:
-
-$$P = \text{Var}_{.995}(S)(1+\alpha_{sop})(1+\alpha_{op})$$
-
-donde $\alpha_{op} = .1$ es el margen para cubrir riesgos operativos; y $\alpha_{sop}$ es el margen adicional para cubrir gastos administrativos, utiilidades, y un margen extra de seguridad.
-
-En este caso $\alpha_{sop} = \alpha_{ga} + \alpha_{ut} + \alpha_{seg} = .30$
-
-y tenemos que:
-- $\alpha_{ga} = .1$ es el margen para cubrir gastos administrativos.
-- $\alpha_{ut} = .05$ es el margen para cubrir utilidades.
-- $\alpha_{seg} = .05$ es el margen para cubrir rango de seguridad.
-
-Para obtener la prima de neta de riesgo individual calculamos:
-
-$$P_{\text{Ind}} = \frac{P}{N}$$
-
-donde $N$ es el número de pólizas en la cartera.
-
-k) RCS
-
-Por nuestro modelo interno de riesgos aprobados por la comisión el RCS se calcula de la siguiente manera:
-
-$$RCS = (\text{Var}_{.995}(S) - \text{Var}_{.5}(S))+\text{Var}_{.995}(S)(1+\alpha_{op}) = N*P*\left(\frac{1}{(1+\alpha_{sop})}+\frac{}{(1+\alpha_{sop})(1+\alpha_{sop})}\right)$$
-
-j) Reservas de RRC y OPC
-
-RRC
-
-Reservaremos todo el porcentaje de la prima que corresponde a la prima de riesgo los gastos administrativos. Esto se representa con la siguiente fórmula:
-
-
-
-OPC
-
-
-
-
-
-Como tenemos modelo interno aprobado, la RCS
-
-l) Dividendos
-No existen dividendos.
-
-m) Valores garantizados.
-No existen valores garantizados.
-
-n) Otros aspectos técnicos relevantes.
-No existen otros aspectos técnicos relevantes.
-
-## Ajustes
-### Ajuste de la distribución de siniestros
-
-Para ajustar la distribución de los siniestros totales utilizamos los siguientes datos, extraídos de ___ . Consideramos las 
-siguientes distribuciones:
-
--
--
--
-
-```{r}
-
-```
-
-En las métricas que utilizamos para elegir la distribución que mejor se ajusta a los datos, obtuvimos los siguientes resultados:
-
-```{r}
-
-```
-
-Por lo que elegimos la distribución ___ para ajustar los siniestros totales.
-
-#### Validaciones
-
-### Ajuste de la distribución del monto de siniestros
-
-Para ajustar la distribución de montos por siniestro utilizamos los siguientes datos, extraídos de ___ . Consideramos las 
-siguientes distribuciones:
--
--
--
-
-```{r}
-
-```
-
-En las métricas que utilizamos para elegir la distribución que mejor se ajusta a los datos, obtuvimos los siguientes resultados:
-
-```{r}
-
-```
-
-Por lo que elegimos la distribución ___ para ajustar los siniestros totales.
-
-#### Validaciones
-
-
-
-## Resultados
-
-
-
 # Modelos
 
 ```{r}
@@ -231,12 +64,12 @@ logverosimilitud_negbin <- function(par) {
 
 # Ajuste a la distribución de Poisson
 ajuste_poisson <- optimize(interval = c(.2,10), f = logverosimilitud_poisson)
-lambda_poisson <- ajuste_poisson$minimum
+(lambda_poisson <- ajuste_poisson$minimum)
 
 # Ajuste a la distribución binomial negativa
 ajuste_negbin <- optim(par = c(1, 1), fn = logverosimilitud_negbin)
 size_negbin <- ajuste_negbin$par[1]
-mu_negbin <- ajuste_negbin$par[2]
+(mu_negbin <- ajuste_negbin$par[2])
 
 ```
 
@@ -244,10 +77,10 @@ mu_negbin <- ajuste_negbin$par[2]
 # AIC()
 
 # AIC para Poisson
-AIC_poisson <- 2 * logverosimilitud_poisson(lambda_poisson) + 2
+(AIC_poisson <- 2 * logverosimilitud_poisson(lambda_poisson) + 2)
 
 # AIC para binomial negativa
-AIC_negbin <- 2 * logverosimilitud_negbin(c(size_negbin, mu_negbin)) + 4
+(AIC_negbin <- 2 * logverosimilitud_negbin(c(size_negbin, mu_negbin)) + 4)
 ```
 
 ```{r}
@@ -281,12 +114,6 @@ cat("Chi-cuadrado para Poisson:", chisq_poisson, "p-value:", p_val_poisson, "\n"
 cat("Chi-cuadrado para Binomial Negativa:", chisq_negbin, "p-value:", p_val_negbin, "\n")
 ```
 
-```{r}
-# Gráfica de ajuste
-library(ggplot2)
-
-```
-
 
 ## Modelos de severidad
 
@@ -311,70 +138,20 @@ calcular_intermedio <- function(rango) {
 # Aplicar la función a los datos
 mydata$Intermedio <- sapply(mydata$"¿Cuánto cuesta tu instrumento?", calcular_intermedio)
 
-listaSeveridad <- c()
-listaMedioSiniestros <- c("500_siniestros" = 500,
-                          "2000_siniestros" = 2000, 
-                          "4000_siniestros" = 4000, 
-                          "7500_siniestros" = 7500, 
-                          "12000_siniestros" = 12000)
 # Modificamos la lista
 mydata <- mydata |> 
   filter(Intermedio>500)
 mean(mydata$Intermedio)
 ```
 
-```{r}
 
-# Bucle para calcular y agregar valores a listaSeveridad
-for (i in 1:nrow(mydata)) {
-  for (j in c("2000_siniestros", "4000_siniestros", "7500_siniestros", "12000_siniestros")) {
-    # Calcular la cantidad a repetir
-    cantidad_a_repetir <- mydata[i, j]
-    # Calcular el valor a agregar
-    valor_a_agregar <- listaMedioSiniestros[j] / mydata$Intermedio[i]
-    if (valor_a_agregar>1){
-      valor_a_agregar <- 1
-    }
-    # Agregar los valores a listaSeveridad
-    listaSeveridad <- c(listaSeveridad, rep(valor_a_agregar, cantidad_a_repetir))
-  }
-}
-
-names(listaSeveridad) <- NULL
-# Transformar valores de 0 y 1 ligeramente para que estén en el intervalo (0, 1)
-eps <- .Machine$double.eps
-listaSeveridad[listaSeveridad == 0] <- 3*eps
-listaSeveridad[listaSeveridad == 1] <- 1 - 3*eps
-# Ajustar una distribución Beta a los datos
-fit_beta <- fitdist(listaSeveridad, "beta", method = "mle")
-
-logverosimilitud_beta <- function(par) {
-  shape1 <- par[1]
-  shape2 <- par[2]
-  result <- -sum(sapply(listaSeveridad, function(x) {
-    -log(dbeta(x, shape1, shape2)
-  }))
-  return(result)
-}
-
-# Ajustar la distribución Beta
-ajuste_beta <- optim(par = c(.3,.5), fn = logverosimilitud_beta)
-
-# Mostrar el resumen del ajuste
-summary(fit_beta)
-
-# Graficar el ajuste
-plot(fit_beta)
-
-```
 
 ## Modelos de siniestralidad
 
 
-```{r}
+```{r, message=FALSE, warning=FALSE}
 library(fitdistrplus)
 library(ggplot2)
-library(extraDistr)
 # deducible <- 1000
 # sevDatos <- sevDatos |> 
 #   filter(Rango != "0-1000")
@@ -435,10 +212,10 @@ params_lognormal <- ajustar_distribucion(logverosimilitud_lognormal, start_param
 params_pareto <- ajustar_distribucion(logverosimilitud_pareto, start_params = c(10, 1000))
 
 # Calcular AIC
-AIC_weibull <- 2 * logverosimilitud_weibull(params_weibull$par) + 4
-AIC_gamma <- 2 * logverosimilitud_gamma(params_gamma$par) + 4
-AIC_lognormal <- 2 * logverosimilitud_lognormal(params_lognormal$par) + 4
-AIC_pareto <- 2 * logverosimilitud_pareto(params_pareto$par) + 4
+(AIC_weibull <- 2 * logverosimilitud_weibull(params_weibull$par) + 4)
+(AIC_gamma <- 2 * logverosimilitud_gamma(params_gamma$par) + 4)
+(AIC_lognormal <- 2 * logverosimilitud_lognormal(params_lognormal$par) + 4)
+(AIC_pareto <- 2 * logverosimilitud_pareto(params_pareto$par) + 4)
 
 # Prueba de chi-cuadrada
 
@@ -465,7 +242,7 @@ calcular_frecuencias_esperadas <- function(distribucion, params, limites, total_
 }
 
 
-total_observaciones <- sum(sevDatos$Frecuencia)
+(total_observaciones <- sum(sevDatos$Frecuencia))
 
 expected_weibull <- calcular_frecuencias_esperadas("weibull", params_weibull, limites, total_observaciones)
 expected_gamma <- calcular_frecuencias_esperadas("gamma", params_gamma, limites, total_observaciones)
@@ -504,28 +281,6 @@ ggplot(comparacion, aes(x = Rango, y = Frecuencia, fill = Tipo)) +
   theme_minimal() +
   scale_fill_manual(values = c("Observada" = "black", "Weibull" = "blue", "Gamma" = "red", "Lognormal" = "green", "Pareto" = "purple"))
 
-x_values <- seq(0, 6000, length.out = 1000)
-# Calcular las densidades para las distribuciones Pareto y Lognormal
-density_pareto <- dpareto(x_values, params_pareto$par[1], params_pareto$par[2])
-density_lognormal <- dlnorm(x_values, params_lognormal$par[1], params_lognormal$par[2])
-
-# Crear un data frame para las densidades
-density_data <- data.frame(
-  x_values = rep(x_values, 2),
-  Density = c(density_pareto, density_lognormal),
-  Distribucion = rep(c("Pareto", "Lognormal"), each = length(x_values))
-)
-
-# Graficar las densidades de Pareto y Lognormal
-ggplot(density_data, aes(x = x_values, y = Density, color = Distribucion)) +
-  geom_line(size = 1) +
-  labs(title = "Densidades Ajustadas de las Distribuciones Pareto y Lognormal",
-       x = "Valores",
-       y = "Densidad",
-       color = "Distribución") +
-  theme_minimal() +
-  scale_color_manual(values = c("Pareto" = "purple", "Lognormal" = "green"))
-
 
 ```
 
@@ -534,35 +289,27 @@ ggplot(density_data, aes(x = x_values, y = Density, color = Distribucion)) +
 ## Pareto
 
 ```{r}
-esperanza_pareto <-  params_pareto$par[2] / (params_pareto$par[1] - 1)
+(esperanza_pareto <-  params_pareto$par[2] / (params_pareto$par[1] - 1))
 
-severidad <- esperanza_pareto/mean(unique(mydata$Intermedio))
+(severidad <- esperanza_pareto/mean(unique(mydata$Intermedio)))
 
 
 ```
 
-## Lognormal
+# Prima de riesgo promedio
 
 ```{r}
-esperanza_lognormal <- exp(params_lognormal$par[1] + params_lognormal$par[2]^2/2)
-
-severidad <- exp(esperanza_lognormal)/mean(unique(mydata$Intermedio))
-
+(primaRiesgoProm <- esperanza_pareto*lambda_poisson)
 ```
 
-## Weibull
+# Prima de riesgo
+
+```{r}
+(primaRiesgo <- severidad*lambda_poisson)
+```
+
+# RCS
 
 ```{r}
 
-esperanza_weibull <- params_weibull$par[2] * gamma(1 + 1/params_weibull$par[1])
-
-severidad <- esperanza_weibull/mean(unique(mydata$Intermedio))
-
 ```
-
-
-
-
-
-
-
