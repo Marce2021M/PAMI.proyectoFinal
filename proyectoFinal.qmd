@@ -374,89 +374,94 @@ plot(fit_beta)
 ```{r}
 library(fitdistrplus)
 library(ggplot2)
-library(extraDistr)
-# deducible <- 1000
-# sevDatos <- sevDatos |> 
-#   filter(Rango != "0-1000")
+deducible <- 1000
+sevDatos <- sevDatos |> 
+  filter(Rango != "0-1000")
 
 # Definir los límites de los rangos
 limites <- list(c(0,1000) ,c(1000, 3000), c(3000, 5000), c(5000, 10000), c(10000, Inf))
+limites2 <- list(c(0, 2000), c(2000, 4000), c(4000, 9000), c(9000, 99000))
 
 # Función de log-verosimilitud para la distribución Weibull
 logverosimilitud_weibull <- function(par) {
+  limites  <- limites2
   shape <- par[1]
   scale <- par[2]
   result <- -sum(sapply(1:nrow(sevDatos), function(i) {
-    sevDatos$Frecuencia[i] * log(pweibull(limites[[i]][2], shape, scale) - pweibull(limites[[i]][1], shape, scale))
-   }))#+sum(sevDatos$Frecuencia)*log(pweibull(deducible, shape, scale, lower.tail = FALSE))
+    sevDatos$Frecuencia[i] * log(pweibull(limites[[i]][2]+deducible, shape, scale) - pweibull(limites[[i]][1]+deducible, shape, scale))-sevDatos$Frecuencia[i]*log(pweibull(deducible, shape, scale, lower.tail = FALSE))
+   }))
   return(result)
-} # empezar con c(1, 1000)
+} 
 
 
 # Función de log-verosimilitud para la distribución Gamma
 logverosimilitud_gamma <- function(par) {
+  limites  <- limites2
   shape <- par[1]
-  rate <- par[2]
+  scale <- par[2]
   result <- -sum(sapply(1:nrow(sevDatos), function(i) {
-    sevDatos$Frecuencia[i] * log(pgamma(limites[[i]][2], shape, scale = rate) - pgamma(limites[[i]][1], shape, scale = rate))
-  }))#+sum(sevDatos$Frecuencia)*log(pgamma(deducible, shape, scale = rate, lower.tail = FALSE))
+    sevDatos$Frecuencia[i] * log(pgamma(limites[[i]][2]+deducible, shape, scale = scale) - pgamma(limites[[i]][1]+deducible, shape, scale = scale))-sevDatos$Frecuencia[i]*log(pgamma(deducible, shape, scale=scale, lower.tail = FALSE))
+  }))
   return(result)
 }
 
 # Función de log-verosimilitud para la distribución Lognormal
 logverosimilitud_lognormal <- function(par) {
+  limites  <- limites2
   meanlog <- par[1]
   sdlog <- par[2]
   result <- -sum(sapply(1:nrow(sevDatos), function(i) {
-    sevDatos$Frecuencia[i] * log(plnorm(log(limites[[i]][2]), meanlog, sdlog) - plnorm(log(limites[[i]][1]), meanlog, sdlog))
-  }))#+ sum(sevDatos$Frecuencia)*log(plnorm(log(deducible), meanlog, sdlog, lower.tail = FALSE))
+    sevDatos$Frecuencia[i] * log(plnorm(limites[[i]][2]+deducible, meanlog, sdlog) - plnorm(limites[[i]][1]+deducible, meanlog, sdlog))-sevDatos$Frecuencia[i]*log(plnorm(deducible, meanlog, sdlog, lower.tail = FALSE))
+  }))
   return(result)
 }
 
 # Función de log-verosimilitud para la distribución Pareto
 logverosimilitud_pareto <- function(par) {
+  limites  <- limites2
   shape <- par[1]
   scale <- par[2]
   result <- -sum(sapply(1:nrow(sevDatos), function(i) {
-    sevDatos$Frecuencia[i] * log(ppareto(limites[[i]][2], shape, scale) - ppareto(limites[[i]][1], shape, scale))
-  }))#+sum(sevDatos$Frecuencia)*log(ppareto(deducible, shape, scale, lower.tail = FALSE))
+    sevDatos$Frecuencia[i] * log(ppareto(limites[[i]][2]+deducible, shape, scale) - ppareto(limites[[i]][1]+deducible, shape, scale))-sevDatos$Frecuencia[i]*log(ppareto(deducible, shape, scale, lower.tail = FALSE))
+  }))
   return(result)
 }
 # Ajustar las distribuciones utilizando optimización
 ajustar_distribucion <- function(logverosimilitud, start_params) {
-  fit <- optim(start_params, logverosimilitud)
+  fit <- optim(start_params, logverosimilitud, method = "SANN")
   return(fit)
 }
 
 # Ajustar las distribuciones
-params_weibull <- ajustar_distribucion(logverosimilitud_weibull, start_params = c(1, 1000))
-params_gamma <- ajustar_distribucion(logverosimilitud_gamma, start_params = c(10, 1000))
-params_lognormal <- ajustar_distribucion(logverosimilitud_lognormal, start_params = c(1, 1))
-params_pareto <- ajustar_distribucion(logverosimilitud_pareto, start_params = c(10, 1000))
+(params_weibull <- ajustar_distribucion(logverosimilitud_weibull, start_params = c(1, 100)))
+(params_gamma <- ajustar_distribucion(logverosimilitud_gamma, start_params = c(10, 2000)))
+(params_lognormal <- ajustar_distribucion(logverosimilitud_lognormal, start_params = c(1, 10)))
+(params_pareto <- ajustar_distribucion(logverosimilitud_pareto, start_params = c(3, 10)))
 
 # Calcular AIC
-AIC_weibull <- 2 * logverosimilitud_weibull(params_weibull$par) + 4
-AIC_gamma <- 2 * logverosimilitud_gamma(params_gamma$par) + 4
-AIC_lognormal <- 2 * logverosimilitud_lognormal(params_lognormal$par) + 4
-AIC_pareto <- 2 * logverosimilitud_pareto(params_pareto$par) + 4
+(AIC_weibull <- 2 * logverosimilitud_weibull(params_weibull$par) + 4)
+(AIC_gamma <- 2 * logverosimilitud_gamma(params_gamma$par) + 4)
+(AIC_lognormal <- 2 * logverosimilitud_lognormal(params_lognormal$par) + 4)
+(AIC_pareto <- 2 * logverosimilitud_pareto(params_pareto$par) + 4)
 
 # Prueba de chi-cuadrada
 
 # Calcular las frecuencias esperadas para cada distribución
 calcular_frecuencias_esperadas <- function(distribucion, params, limites, total_observaciones) {
+
   p <- sapply(1:length(limites), function(i) {
     if (distribucion == "weibull") {
-      return((pweibull(limites[[i]][2], params$par[1], params$par[2]) - 
-                pweibull(limites[[i]][1], params$par[1], params$par[2])))
+      return((pweibull(limites[[i]][2]+deducible, params$par[1], params$par[2]) - 
+                pweibull(limites[[i]][1]+deducible, params$par[1], params$par[2]))/pweibull(deducible, params$par[1], params$par[2], lower.tail = FALSE))
     } else if (distribucion == "gamma") {
-      return((pgamma(limites[[i]][2], params$par[1], rate = params$par[2]) - 
-                pgamma(limites[[i]][1], params$par[1], rate = params$par[2])))
+      return((pgamma(limites[[i]][2]+deducible, params$par[1], scale = params$par[2]) - 
+                pgamma(limites[[i]][1]+deducible, params$par[1], scale = params$par[2]))/pgamma(deducible, params$par[1], scale = params$par[2], lower.tail = FALSE))
     } else if (distribucion == "lognormal") {
-      return((plnorm(log(limites[[i]][2]), params$par[1], params$par[2]) - 
-                plnorm(log(limites[[i]][1]), params$par[1], params$par[2])))
+      return((plnorm(limites[[i]][2]+deducible, params$par[1], params$par[2]) - 
+                plnorm(limites[[i]][1]+deducible, params$par[1], params$par[2]))/plnorm(deducible, params$par[1], params$par[2], lower.tail = FALSE))
     } else if (distribucion == "pareto") {
-      return((ppareto(limites[[i]][2], params$par[1], params$par[2]) - 
-                ppareto(limites[[i]][1], params$par[1], params$par[2])))
+      return((ppareto(limites[[i]][2]+deducible, params$par[1], params$par[2]) - 
+                ppareto(limites[[i]][1]+deducible, params$par[1], params$par[2]))/ppareto(deducible, params$par[1], params$par[2], lower.tail = FALSE))
     } else {
       stop("Distribución no soportada")
     }
@@ -467,16 +472,16 @@ calcular_frecuencias_esperadas <- function(distribucion, params, limites, total_
 
 total_observaciones <- sum(sevDatos$Frecuencia)
 
-expected_weibull <- calcular_frecuencias_esperadas("weibull", params_weibull, limites, total_observaciones)
-expected_gamma <- calcular_frecuencias_esperadas("gamma", params_gamma, limites, total_observaciones)
-expected_lognormal <- calcular_frecuencias_esperadas("lognormal", params_lognormal, limites, total_observaciones)
-expected_pareto <- calcular_frecuencias_esperadas("pareto", params_pareto, limites, total_observaciones)
+expected_weibull <- calcular_frecuencias_esperadas("weibull", params_weibull, limites2, total_observaciones)
+expected_gamma <- calcular_frecuencias_esperadas("gamma", params_gamma, limites2, total_observaciones)
+expected_lognormal <- calcular_frecuencias_esperadas("lognormal", params_lognormal, limites2, total_observaciones)
+expected_pareto <- calcular_frecuencias_esperadas("pareto", params_pareto, limites2, total_observaciones)
 
 # Realizar la prueba chi cuadrado para cada distribución
 observed <- sevDatos$Frecuencia
 
 chisq_test_weibull <- chisq.test(x = observed, p = expected_weibull / sum(expected_weibull), rescale.p = TRUE)
-chisq_test_gamma <- chisq.test(x = observed, p = expected_gamma / sum(expected_gamma), rescale.p = TRUE)
+chisq_test_gamma <- chisq.test(x = observed, p = expected_gamma / sum(expected_gamma), rescale.p = TRUE, simulate.p.value = TRUE)
 chisq_test_lognormal <- chisq.test(x = observed, p = expected_lognormal / sum(expected_lognormal), rescale.p = TRUE)
 chisq_test_pareto <- chisq.test(x = observed, p = expected_pareto / sum(expected_pareto), rescale.p = TRUE)
 
@@ -504,28 +509,6 @@ ggplot(comparacion, aes(x = Rango, y = Frecuencia, fill = Tipo)) +
   theme_minimal() +
   scale_fill_manual(values = c("Observada" = "black", "Weibull" = "blue", "Gamma" = "red", "Lognormal" = "green", "Pareto" = "purple"))
 
-x_values <- seq(0, 6000, length.out = 1000)
-# Calcular las densidades para las distribuciones Pareto y Lognormal
-density_pareto <- dpareto(x_values, params_pareto$par[1], params_pareto$par[2])
-density_lognormal <- dlnorm(x_values, params_lognormal$par[1], params_lognormal$par[2])
-
-# Crear un data frame para las densidades
-density_data <- data.frame(
-  x_values = rep(x_values, 2),
-  Density = c(density_pareto, density_lognormal),
-  Distribucion = rep(c("Pareto", "Lognormal"), each = length(x_values))
-)
-
-# Graficar las densidades de Pareto y Lognormal
-ggplot(density_data, aes(x = x_values, y = Density, color = Distribucion)) +
-  geom_line(size = 1) +
-  labs(title = "Densidades Ajustadas de las Distribuciones Pareto y Lognormal",
-       x = "Valores",
-       y = "Densidad",
-       color = "Distribución") +
-  theme_minimal() +
-  scale_color_manual(values = c("Pareto" = "purple", "Lognormal" = "green"))
-
 
 ```
 
@@ -534,33 +517,65 @@ ggplot(density_data, aes(x = x_values, y = Density, color = Distribucion)) +
 ## Pareto
 
 ```{r}
-esperanza_pareto <-  params_pareto$par[2] / (params_pareto$par[1] - 1)
+esperanza_pareto <-  (params_pareto$par[2] / (params_pareto$par[1] - 1))/(ppareto(deducible, params_pareto$par[1], params_pareto$par[2], lower.tail = FALSE))
 
 severidad <- esperanza_pareto/mean(unique(mydata$Intermedio))
 
 
 ```
 
-## Lognormal
 
-```{r}
-esperanza_lognormal <- exp(params_lognormal$par[1] + params_lognormal$par[2]^2/2)
-
-severidad <- exp(esperanza_lognormal)/mean(unique(mydata$Intermedio))
-
-```
 
 ## Weibull
 
 ```{r}
 
-esperanza_weibull <- params_weibull$par[2] * gamma(1 + 1/params_weibull$par[1])
+esperanza_weibull <- (params_weibull$par[2] * gamma(1 + 1/params_weibull$par[1]))/pweibull(deducible, params_weibull$par[1], params_weibull$par[2], lower.tail = FALSE)
 
 severidad <- esperanza_weibull/mean(unique(mydata$Intermedio))
 
 ```
 
+## Gamma
 
+```{r}
+esperanza_gamma <- (params_gamma$par[1] * params_gamma$par[2])/pgamma(deducible, params_gamma$par[1], scale = params_gamma$par[2], lower.tail = FALSE)
+
+severidad <- esperanza_gamma/mean(unique(mydata$Intermedio))
+
+```
+
+## Lognormal
+```{r}
+esperanza_lognormal <- exp(params_lognormal$par[1] + (params_lognormal$par[2]^2)/2)/plnorm(deducible, params_lognormal$par[1], params_lognormal$par[2], lower.tail = FALSE) -(exp(params_lognormal$par[1] + (params_lognormal$par[2]^2)/2)/plnorm(deducible, params_lognormal$par[1], params_lognormal$par[2], lower.tail = FALSE))*pnorm((log(deducible)-params_lognormal$par[1] - params_lognormal$par[2]^2)/params_lognormal$par[2]) + deducible*(1-pnorm((log(deducible)-params_lognormal$par[1])/params_lognormal$par[2]))
+
+severidad <- esperanza_lognormal/mean(unique(mydata$Intermedio))
+```
+
+# Simulaciones
+```{r}
+mean(qweibull(runif(1000)*pweibull(deducible, params_weibull$par[1], params_weibull$par[2] , lower.tail = FALSE),params_weibull$par[1], params_weibull$par[2] ))
+```
+
+```{r}
+mean(qgamma(runif(1000)*pgamma(deducible, params_gamma$par[1], scale = params_gamma$par[2], lower.tail = FALSE), params_gamma$par[1], scale = params_gamma$par[2]))
+
+```
+
+```{r}
+mean(qpareto(runif(1000)*ppareto(1000, params_pareto$par[1], params_pareto$par[2], lower.tail = FALSE), params_pareto$par[1], params_pareto$par[2]))
+```
+
+```{r}
+mean(qweibull(runif(1000)*pweibull(deducible, params_weibull$par[1], params_weibull$par[2] , lower.tail = FALSE),params_weibull$par[1], params_weibull$par[2] ))
+```
+```{r}
+mean(qlnorm(runif(100000000)*plnorm(deducible, params_lognormal$par[1], params_lognormal$par[2], lower.tail = FALSE)+plnorm(deducible, params_lognormal$par[1], params_lognormal$par[2]), params_lognormal$par[1], params_lognormal$par[2] )-deducible)
+```
+
+```{r}
+ppareto(3000, params_pareto$par[1], params_pareto$par[2])*70
+```
 
 
 

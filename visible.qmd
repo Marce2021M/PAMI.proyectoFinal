@@ -185,7 +185,7 @@ logverosimilitud_lognormal <- function(par) {
   meanlog <- par[1]
   sdlog <- par[2]
   result <- -sum(sapply(1:nrow(sevDatos), function(i) {
-    sevDatos$Frecuencia[i] * log(plnorm(log(limites[[i]][2]), meanlog, sdlog) - plnorm(log(limites[[i]][1]), meanlog, sdlog))
+    sevDatos$Frecuencia[i] * log(plnorm(limites[[i]][2], meanlog, sdlog) - plnorm(limites[[i]][1], meanlog, sdlog))
   }))#+ sum(sevDatos$Frecuencia)*log(plnorm(log(deducible), meanlog, sdlog, lower.tail = FALSE))
   return(result)
 }
@@ -252,8 +252,8 @@ expected_pareto <- calcular_frecuencias_esperadas("pareto", params_pareto, limit
 # Realizar la prueba chi cuadrado para cada distribución
 observed <- sevDatos$Frecuencia
 
-chisq_test_weibull <- chisq.test(x = observed, p = expected_weibull / sum(expected_weibull), rescale.p = TRUE)
-chisq_test_gamma <- chisq.test(x = observed, p = expected_gamma / sum(expected_gamma), rescale.p = TRUE)
+chisq_test_weibull <- chisq.test(x = observed, p = expected_weibull / sum(expected_weibull), rescale.p = TRUE, simulate.p.value = TRUE)
+chisq_test_gamma <- chisq.test(x = observed, p = expected_gamma / sum(expected_gamma), rescale.p = TRUE, simulate.p.value = TRUE)
 chisq_test_lognormal <- chisq.test(x = observed, p = expected_lognormal / sum(expected_lognormal), rescale.p = TRUE)
 chisq_test_pareto <- chisq.test(x = observed, p = expected_pareto / sum(expected_pareto), rescale.p = TRUE)
 
@@ -284,11 +284,48 @@ ggplot(comparacion, aes(x = Rango, y = Frecuencia, fill = Tipo)) +
 
 ```
 
+# Con deducible
 
+## Pareto
+```{r}
+deducible <- 2000
+simulacionUnif <- runif(1000000, 0, 1)
+
+verifProb <- simulacionUnif >= ppareto(deducible, params_pareto$par[1], params_pareto$par[2])
+
+simulacionesPerdida <- ifelse(verifProb,qpareto(simulacionUnif, params_pareto$par[1], params_pareto$par[2]) -2000, 0)
+
+mean(simulacionesPerdida)
+```
+
+```{r}
+(cuota <- .8*mean(simulacionesPerdida)*lambda_poisson/mean(mydata$Intermedio))
+```
+
+## Lognormal
+
+```{r}
+deducible <- 1000
+simulacionUnif <- runif(100000, 0, 1)
+
+verifProb <- simulacionUnif >= plnorm(deducible, params_lognormal$par[1], params_lognormal$par[2])
+
+simulacionesPerdida <- ifelse(verifProb,qlnorm(simulacionUnif, params_lognormal$par[1], params_lognormal$par[2])-1000 , 0)
+
+mean(simulacionesPerdida)
+```
+
+
+
+
+# Sin deducible
 
 ## Pareto
 
 ```{r}
+
+
+
 (esperanza_pareto <-  params_pareto$par[2] / (params_pareto$par[1] - 1))
 
 (severidad <- esperanza_pareto/mean(unique(mydata$Intermedio)))

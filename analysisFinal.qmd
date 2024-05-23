@@ -1,0 +1,43 @@
+---
+title: "Clase Modelado 1"
+lang: es
+date: today
+format:
+  pdf:
+    latex_engine: xelatex
+nocite: |
+  @*
+---
+
+# Modelos
+
+```{r, message=FALSE, warning=FALSE}
+# Corremos librerías
+library(dplyr)
+library(ggplot2)
+library(purrr)
+library(MASS)
+library(fitdistrplus)
+library(actuar)
+
+# Datos
+# Dataframe con la severidad de los siniestros
+sevDatos <- data.frame(
+  Rango = c("0-1000", "1000-3000", "3000-5000", "5000-10000", "+10000"),
+  Frecuencia = c(79, 37, 4, 6, 7)
+)
+
+sevDatos
+# Dataframe con la frecuencia de los siniestros
+frecDatos <- data.frame(
+  Rango = c("0--1", "2--3", "3--4"),
+  Completa = c(56, 12, 2)
+)
+
+frecDatos
+```
+
+
+
+
+
