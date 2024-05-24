@@ -7,6 +7,7 @@ format:
     latex_engine: xelatex
 nocite: |
   @*
+cache : true
 ---
 
 # Supuestos, bases y datos
@@ -107,7 +108,7 @@ Dada la forma de los datos de frecuencia, los modelos que mejor pueden convenir 
 
 ## Ajuste modelos de frecuencia 
 
-```{r}
+```{r, message=FALSE, warning=FALSE}
 library(stats4)
 # Definir los límites de los intervalos
 intervalos <- list(c(-1, 1), c(1, 3), c(3,4))
@@ -183,7 +184,7 @@ Notamos que al ajustar, se valida la bondad de ajuste de los modelos de Poisson 
 
 Por último, solo mostraremos los resultados del ajuste gráficamente.
 
-```{r}
+```{r, message=FALSE, warning=FALSE}
 library(ggplot2)
 
 # Crear un data frame con todos los datos
@@ -217,12 +218,14 @@ ggsave(filename = "ajuste_frecuencia.jpg", plot = plot3, device = "jpeg")
 
 Procedimos a ajustar los modelos weibull, gamma, lognormal y pareto a los datos de siniestralidad. Y con los cuales obtuvimos la siguiente gráfica para comparar el ajuste, además de que realizamos una prueba Chi-cuadrado para validar la bondad de ajuste de los modelos.
 
-```{r}
+```{r, message=FALSE, warning=FALSE}
 # Ajuste de los datos
 library(fitdistrplus)
 library(ggplot2)
 library(readxl)
 # Corregir los datos
+
+set.seed(191654)
 
 mydata <- read_excel("instrumentos.xlsx", sheet = "data")
 
@@ -375,7 +378,7 @@ Con lo cual evaluando las pruebas de bondad de ajuste, la gráfica comparativa y
 
 El modelo de pérdida agregada para calcular la prima de riesgo promedio y la cuota de riesgo fue el siguiente:
 
-$S = \sum_{i=1}^{N} V_{i} W_{i}$
+$$S = \sum_{i=1}^{N} V_{i} W_{i}$$
 
 Donde 
 
@@ -391,7 +394,7 @@ Dado este modelo de riesgo colectivo presentado, procedemos a calcular la prima 
 
 La prima de riesgo promedio para este seguro de daños de instrumentos musicales se calcula como la esperanza del modelo:
 
-$E[S] = E[\sum_{i=1}^{N} V_{i} W_{i}] = E[N] E[V] E[W]=E[N]E[VW]$
+$$E[S] = E[\sum_{i=1}^{N} V_{i} W_{i}] = E[N] E[V] E[W]=E[N]E[VW]$$
 
 Donde $E[N]$ es la esperanza del número de eventos, y $E[VW]=E[V]E[W]$ es la siniestralidad esperada que tendríamos para una cartera equilibrada de instrumentos musicales.
 
@@ -401,97 +404,245 @@ Con lo cual, si suscribimos equilibradamente nuestros riesgos, tendriamos que co
 
 Ahora bien, para calcular esta prima de riesgo recurrimos numéricamente a simular los valores de nuestro modelo de riesgo colectivo, de acuerdo con modelos ajustados de la sección anterior para las variables aleatorias $N$ y $VW$. 
 
+En este caso hay que notar, que para evitar muchas siniestralidades pequeñas se ha decidido que el deducible sea de 1000, coaseguro del 10%, y que el límite de la aseguradora sea de 100000.
+
+Con lo cual, para nosotros nuestro riesgo de siniestralidad está medido de acuerdo con la siguiente variable $VW = \text{min}((X-1000)_{+}, 100000)$
+
 ## Cálculos
 
-```{r}
-# Esperanza de S
+Para poder calcular la esperanza utilizaremos técnicas avanzadas de simulación. En este caso utilizaremos el método de bootstrap paramétrico para calcular la esperanza de la siniestralidad.
 
-# Simulación bootstrap paramétrico
-# 0 .- Ajuste de los modelos N y VW (ya calculados anteriormente los parámetros de la pareto y poisson)
-
-## Simulación de S
-# 1.- M Simulaciones de N
-# 2.- N1+...+NM Simulaciones de VW
-# 3.- Construcción de M simulaciones de S dado 1 y 2
-## Plug in
-# 4.- Promedio de S (Plugin de la esperanza de S)
-# 5.- Con los datos simulados, ajustar con fitdistrplus una distribución pareto para VW y una Poisson para N.
-# 6.- Repetir de nuevo desde 1 por B = 100000
-
+```{r, message=FALSE, warning=FALSE}
 library(fitdistrplus)
 library(actuar)  # Para la distribución Pareto
-
+library(parallel)
+set.seed(191654)
 # Supuestos de los parámetros calculados anteriormente
-lambda_poisson <- 5  # Tasa de la distribución Poisson
-alpha_pareto <- 2    # Parámetro de forma de la distribución Pareto
-beta_pareto <- 1     # Parámetro de escala de la distribución Pareto
+deducible <- 1000    # Deducible para ajustar los valores de VW
+lambda_poisson <- lambda_poisson  # Tasa de la distribución Poisson
+alpha_pareto <- params_pareto$par[1]    # Parámetro de forma de la distribución Pareto
+beta_pareto <- params_pareto$par[2]     # Parámetro de escala de la distribución Pareto
 
+limAseg <- 80000  # Límite de la aseguradora
 # Número de simulaciones
-M <- 1000
-B <- 100000
+M <- 10000
+B <- 10000
 
-# Función de simulación
-simular_S <- function(lambda_poisson, alpha_pareto, beta_pareto, M) {
+# Función de simulación optimizada
+simular_S <- function(lambda_poisson, alpha_pareto, beta_pareto, deducible, M) {
   # 1. Simulaciones de N
   N <- rpois(M, lambda_poisson)
   
   # 2. Simulaciones de VW
-  VW <- unlist(lapply(N, function(n) {
+  VW <- lapply(N, function(n) {
     if (n == 0) return(0)
-    return(rpareto(n, shape = alpha_pareto, scale = beta_pareto))
-  }))
+    valores <- rpareto(n, shape = alpha_pareto, scale = beta_pareto)
+    valores[valores > deducible] <- valores[valores > deducible] - deducible
+    valores[valores <= deducible] <- 0
+    valores[valores > limAseg] <- limAseg
+    return(valores*.95)
+  })
   
   # 3. Construcción de M simulaciones de S
-  S <- rep(NA, M)
-  for (i in 1:M) {
-    if (N[i] == 0) {
-      S[i] <- 0
-    } else {
-      S[i] <- sum(VW[(sum(N[1:(i-1)]) + 1):sum(N[1:i])])
-    }
-  }
+  S <- sapply(VW, sum)
+  
+  VW <- unlist(VW)
   
   return(list(S = S, N = N, VW = VW))
 }
 
-# Inicializar vectores para almacenar resultados de cada iteración
-promedios_S <- numeric(B)
-params_poisson <- matrix(NA, nrow = B, ncol = 1)
-params_pareto <- matrix(NA, nrow = B, ncol = 2)
-
-# Repetir B veces el proceso de simulación y ajuste
-for (b in 1:B) {
-  sim_data <- simular_S(lambda_poisson, alpha_pareto, beta_pareto, M)
-  S <- sim_data$S
-  N <- sim_data$N
-  VW <- sim_data$VW[sim_data$VW > 0]  # Eliminar los ceros generados por N = 0
-  
-  # 4. Promedio de S
-  promedios_S[b] <- mean(S)
-  
-  # 5. Ajustar distribuciones con fitdistrplus
-  fit_poisson <- fitdist(N, "pois")
-  fit_pareto <- fitdist(VW, "pareto", start = list(shape = alpha_pareto, scale = beta_pareto))
-  
-  # Almacenar parámetros ajustados
-  params_poisson[b,] <- fit_poisson$estimate
-  params_pareto[b,] <- fit_pareto$estimate
+# Función para ejecutar el proceso en paralelo
+simular_bootstrap <- function(iter, lambda_poisson, alpha_pareto, beta_pareto, deducible, M) {
+  sim_data <- simular_S(lambda_poisson, alpha_pareto, beta_pareto, deducible, M)
+  mean(sim_data$S)
 }
+
+# Configurar clúster para paralelización
+cl <- makeCluster(detectCores() - 1)
+clusterExport(cl, c("lambda_poisson", "alpha_pareto", "beta_pareto", "deducible", "M", "simular_S", "rpois", "rpareto", "sapply", "unlist", "limAseg"))
+
+# Ejecutar simulaciones en paralelo
+promedios_S <- parSapply(cl, 1:B, simular_bootstrap, lambda_poisson, alpha_pareto, beta_pareto, deducible, M)
+
+# Detener clúster
+#stopCluster(cl)
 
 # Resultados
 mean_promedio_S <- mean(promedios_S)
-params_poisson_mean <- colMeans(params_poisson)
-params_pareto_mean <- colMeans(params_pareto)
-
-# Calcular el error estándar bootstrap del promedio de S
 error_estandar_S <- sd(promedios_S)
 
 # Mostrar resultados
 cat("Promedio de S (Plugin de la esperanza de S):", mean_promedio_S, "\n")
 cat("Error estándar bootstrap del promedio de S:", error_estandar_S, "\n")
-cat("Parámetros ajustados para la distribución Poisson (lambda):", params_poisson_mean, "\n")
-cat("Parámetros ajustados para la distribución Pareto (shape y scale):", params_pareto_mean, "\n")
 ```
+
+Es decir, la cuota de riesgo que tendríamos que cobrar a cada instrumento asegurado en nuestra cartera equilibrada sería de 
+
+$$E[VW]/E[V] = \frac{`r mean_promedio_S`}{`r mean(mydata$Intermedio)`}$$
+
+`r mean_promedio_S/mean(mydata$Intermedio)`.
+
+Para terminar de validar el ajuste presentamos el histograma de la distribución boostrap de la siniestralidad esperada agregada.
+
+```{r, message=FALSE, warning=FALSE}
+# Calcular los valores acumulados de los promedios de S
+promedios_S_acumulados <- cumsum(promedios_S) / seq_along(promedios_S)
+
+library(ggplot2)
+
+# Crear un data frame con los valores acumulados de los promedios de S
+df_acumulados <- data.frame(
+  Iteracion = seq_along(promedios_S_acumulados),
+  Promedio_Acumulado_S = promedios_S_acumulados
+)
+
+# Crear el histograma para los valores acumulados
+(plot_acumulado <- ggplot(df_acumulados, aes(x = Promedio_Acumulado_S)) +
+  geom_histogram(binwidth = 3, fill = "blue", color = "black", alpha = 0.7) +
+  labs(title = "Histograma de los Promedios Acumulados de S",
+       x = "Valor Promedio Acumulado de S",
+       y = "Frecuencia") +
+  theme_minimal())
+
+# Guardar la gráfica en un archivo JPG
+ggsave(filename = "histograma_promedios_acumulados_S.jpg", plot = plot_acumulado, device = "jpeg")
+
+
+```
+
+# RCS
+
+Ahora dado los resultados anteriores debemos de calcular el requerimiento de capital de solvencia (RCS) para la aseguradora. Para ello, debemos de calcular 3 componentes:
+
+$$\textbf{RCS} = \textbf{RCS}_{T} + \textbf{RCS}_{F}+ \textbf{RCS}_{Op}$$
+
+Donde:
+
+- $\textbf{RCS}_{T}$ es el requerimiento de capital de solvencia técnico, que se calcula como el exceso del percentil 99.5 de la distribución de la siniestralidad esperada agregada con respecto a lo esperado. Es decir, $\textbf{RCS}_{T}=q_{0.995}(S)-E(S)$. Esta fórmula es muy simple porque solo tenemos un producto y es lo máximo que podríamos perder en un año con una confianza del 99.5%.
+
+- $\textbf{RCS}_{F}$ es el requerimiento de capital de solvencia financiero. En este caso es cero, porque suponemos que no tendremos riesgos financieros a un año.
+
+- $\textbf{RCS}_{Op}$ es el requerimiento de capital de solvencia operativo, que se calcula como el 15% de la prima de riesgo promedio.
+
+Por lo tanto, para el cálculo del RCS, procedemos a calcular el RCS técnico y el RCS operativo.
+
+```{r, message=FALSE, warning=FALSE}
+# Calcular el RCS técnico
+# Número de simulaciones
+M <- 10000
+B <- 10000
+
+# Función de simulación optimizada
+simular_S <- function(lambda_poisson, alpha_pareto, beta_pareto, deducible, M) {
+  # 1. Simulaciones de N
+  N <- rpois(M, lambda_poisson)
+  
+  # 2. Simulaciones de VW
+  VW <- lapply(N, function(n) {
+    if (n == 0) return(0)
+    valores <- rpareto(n, shape = alpha_pareto, scale = beta_pareto)
+    valores[valores > deducible] <- valores[valores > deducible] - deducible
+    valores[valores <= deducible] <- 0
+    valores[valores > limAseg] <- limAseg
+    return(valores*.95)
+  })
+  
+  # 3. Construcción de M simulaciones de S
+ # Calcular el percentil 99.5 de S
+  S <- sapply(VW, sum)
+
+  
+  VW <- unlist(VW)
+  
+  return(list(S = S, N = N, VW = VW))
+}
+
+# Función para ejecutar el proceso en paralelo
+simular_bootstrap <- function(iter, lambda_poisson, alpha_pareto, beta_pareto, deducible, M) {
+  sim_data <- simular_S(lambda_poisson, alpha_pareto, beta_pareto, deducible, M)
+  quantile(sim_data$S, 0.995)
+}
+
+# Configurar clúster para paralelización
+cl <- makeCluster(detectCores() - 1)
+clusterExport(cl, c("lambda_poisson", "alpha_pareto", "beta_pareto", "deducible", "M", "simular_S", "rpois", "rpareto", "sapply", "unlist", "limAseg"))
+
+# Ejecutar simulaciones en paralelo
+cuantiles_S <- parSapply(cl, 1:B, simular_bootstrap, lambda_poisson, alpha_pareto, beta_pareto, deducible, M)
+
+# Detener clúster
+#stopCluster(cl)
+
+# Resultados
+mean_cuantil_S <- mean(cuantiles_S)
+error_estandar_S <- sd(cuantiles_S)
+
+# Mostrar resultados
+cat("Promedio de S (Plugin de la esperanza de S):", mean_cuantil_S, "\n")
+cat("Error estándar bootstrap del promedio de S:", error_estandar_S, "\n")
+
+# Intervalos:
+
+# Calcular los intervalos de confianza bootstrap utilizando cuantiles
+cuantiles_S_Int <- quantile(cuantiles_S, c(0.025, 0.5, .75,0.975))
+
+# Extraer los cuantiles
+(cuantil_2.5 <- cuantiles_S_Int[1])
+(cuantil_50 <- cuantiles_S_Int[2])
+(cuantil_75 <- cuantiles_S_Int[3])
+(cuantil_97.5 <- cuantiles_S_Int[4])
+
+
+#  Gráfica
+cuantiles_S_acumulados <- cumsum(cuantiles_S) / seq_along(cuantiles_S)
+
+# Crear un data frame con los valores acumulados de los promedios de S
+df_acumulados <- data.frame(
+  Iteracion = seq_along(cuantiles_S_acumulados),
+  Promedio_Acumulado_S = cuantiles_S_acumulados
+)
+
+# Crear el histograma para los valores acumulados
+(plot_acumulado <- ggplot(df_acumulados, aes(x = Promedio_Acumulado_S)) +
+  geom_histogram(binwidth = 100, fill = "blue", color = "black", alpha = 0.7) +
+  labs(title = "Histograma de los Cuantiles Acumulados de S",
+       x = "Valor Promedio Acumulado de los cuantiles de S",
+       y = "Frecuencia") +
+  theme_minimal())
+
+# Guardar la gráfica en un archivo JPG
+ggsave(filename = "histograma_cuantiles_acumulados_S.jpg", plot = plot_acumulado, device = "jpeg")
+
+```
+
+Es decir, el RCS técnico que tendríamos que tener para asegurar los riesgos de siniestralidad esperada agregada es de  `r mean_cuantil_S - mean_promedio_S` en promedio por cada póliza. 
+
+Por otro lado, el RCS operativo que tendríamos que tener para asegurar los riesgos de operación es de `r mean_promedio_S * 0.15` por cada póliza.
+
+Por lo tanto, el RCS total que tendríamos que tener para asegurar los riesgos de siniestralidad y operativos es de `r mean_cuantil_S - mean_promedio_S + mean_promedio_S * 0.15` por cada póliza. 
+
+
+# Tarificación
+
+Para la tarificación de los seguros de instrumentos musicales, se propone una tarifa de acuerdo con la cuota de riesgo calculada anteriormente, pero agregamos gastos administrativos del 10% de la cuota de riesgo, utilidad del 20%, y un margen de seguridad del 20% de la cuota de riesgo.
+
+Por lo tanto, la cuota de tarifa que proponemos para el seguro de instrumentos musicales es de `r mean_promedio_S/(mean(mydata$Intermedio) * (1-.5))` por cada instrumento asegurado.
+
+Al final, nos daría una tarifa promedio de `r mean_promedio_S/((1-.5))` por cada instrumento asegurado.
+
+# RRC
+
+Para la RRC, debemos reservar por un año un porcentaje por cada póliza vendida, este porcentaje se calcula de la siguiente forma para cada póliza vendida:
+
+$$RRC\% = \frac{\text{primaRiesgo}}{\text{primaTarifa}} = `r (1-.4)`$$
+
+Suponemos que en todos los años las pólizas se adquieren uniformemente a lo largo del año, y se devengan uniformemente por el plazo del seguro renovable, que es un año. Por lo que en un año, de todo lo que se venda en pólizas se debe reservar la mitad de la prima de riesgo promedio.
+
+# ROPC
+
+Como no tenemos experiencia en el mercado, proponemos un ROPC del 100% de la prima de riesgo promedio, es decir, `r (1-.4) ` por cada póliza vendida. Ya cuando generemos experiencia, podremos ajustar este parámetro.
+
+
 
 
 
