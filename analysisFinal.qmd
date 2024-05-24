@@ -9,6 +9,10 @@ nocite: |
   @*
 ---
 
+# Supuestos, bases y datos
+
+
+
 # Modelos
 
 ```{r, message=FALSE, warning=FALSE}
@@ -24,7 +28,7 @@ library(actuar)
 # Dataframe con la severidad de los siniestros
 sevDatos <- data.frame(
   Rango = c("0-1000", "1000-3000", "3000-5000", "5000-10000", "+10000"),
-  Frecuencia = c(79, 37, 4, 6, 7)
+  Frecuencia = c(79, 37, 4, 6, 9)
 )
 
 sevDatos
@@ -36,6 +40,460 @@ frecDatos <- data.frame(
 
 frecDatos
 ```
+
+
+## Análisis exploratorio de datos
+
+### Siniestralidad
+
+```{r, message=FALSE, warning=FALSE}
+# Histograma de la severidad
+
+# Calcular los porcentajes
+sevDatos$Porcentaje <- sevDatos$Frecuencia / sum(sevDatos$Frecuencia) * 100
+
+# Definir los niveles deseados en el orden correcto
+niveles_deseados <- c("0-1000", "1000-3000", "3000-5000", "5000-10000", "+10000")
+
+# Convertir Rango a factor con el orden deseado
+sevDatos$Rango <- factor(sevDatos$Rango, levels = niveles_deseados)
+
+# Crear la gráfica con ggplot2
+library(ggplot2)
+(plot1 <- ggplot(sevDatos, aes(x = Rango, y = Porcentaje)) +
+  geom_bar(stat = "identity") +
+  labs(title = "Datos agrupados de los montos de la siniestralidad al año",
+       x = "Monto de siniestralidad",
+       y = "Porcentaje del total de casos") +
+  scale_y_continuous(labels = scales::percent_format(scale = 1)))
+
+# Guardar el gráfico en un archivo JPG
+ggsave(filename = "histograma_severidad_porc.jpg", plot = plot1, device = "jpeg")
+```
+
+Con lo cual notamos que para la siniestralidad de estos datos, los modelos que convienen deben de ser colas pesadas o medio pesadas, dado que se ve un ligero incremento final en la siniesralidad.
+
+### Frecuencia
+
+```{r}
+# Histograma de la frecuencia
+
+# Calcular los porcentajes
+frecDatos$Porcentaje <- frecDatos$Completa / sum(frecDatos$Completa) * 100
+
+# Definir los niveles deseados en el orden correcto
+
+niveles_deseados <- c("0--1", "2--3", "3--4")
+
+# Convertir Rango a factor con el orden deseado
+
+frecDatos$Rango <- factor(frecDatos$Rango, levels = niveles_deseados)
+
+# Crear la gráfica con ggplot2
+
+(plot2 <- ggplot(frecDatos, aes(x = Rango, y = Porcentaje)) +
+  geom_bar(stat = "identity") +
+  labs(title = "Datos agrupados de la frecuencia de siniestros al año",
+       x = "Frecuencia de siniestros",
+       y = "Porcentaje del total de casos") +
+  scale_y_continuous(labels = scales::percent_format(scale = 1)))
+
+# Guardar el gráfico en un archivo JPG
+
+ggsave(filename = "histograma_frecuencia_porc.jpg", plot = plot2, device = "jpeg")
+```
+
+Dada la forma de los datos de frecuencia, los modelos que mejor pueden convenir son los modelos de Poisson o Binomial Negativa de la clase(a,b,0) para mantenerlo parsiarmónico. 
+
+## Ajuste modelos de frecuencia 
+
+```{r}
+library(stats4)
+# Definir los límites de los intervalos
+intervalos <- list(c(-1, 1), c(1, 3), c(3,4))
+
+# Crear una función de log-verosimilitud para la distribución de Poisson
+logverosimilitud_poisson <- function(lambda) {
+  result <- -sum(sapply(1:nrow(frecDatos), function(i) {
+    frecDatos$Completa[i] * log(ppois(intervalos[[i]][2], lambda)-ppois(intervalos[[i]][1], lambda))
+  }))
+  return(result)
+}
+
+# Crear una función de log-verosimilitud para la distribución binomial negativa
+logverosimilitud_negbin <- function(par) {
+  size <- par[1]
+  mu <- par[2]
+  result <- -sum(sapply(1:nrow(frecDatos), function(i) {
+    frecDatos$Completa[i] *log(pnbinom(intervalos[[i]][2], size = size, mu = mu)-pnbinom(intervalos[[i]][1], size = size, mu = mu))
+  }))
+  return(result)
+}
+
+
+# Ajuste a la distribución de Poisson
+ajuste_poisson <- optimize(interval = c(.2,10), f = logverosimilitud_poisson)
+(lambda_poisson <- ajuste_poisson$minimum)
+
+# Ajuste a la distribución binomial negativa
+ajuste_negbin <- optim(par = c(1, 1), fn = logverosimilitud_negbin)
+size_negbin <- ajuste_negbin$par[1]
+(mu_negbin <- ajuste_negbin$par[2])
+
+
+# AIC()
+
+# AIC para Poisson
+(AIC_poisson <- 2 * logverosimilitud_poisson(lambda_poisson) + 2)
+
+# AIC para binomial negativa
+(AIC_negbin <- 2 * logverosimilitud_negbin(c(size_negbin, mu_negbin)) + 4)
+
+# Prueba de chi-cuadrado
+observados <- frecDatos$Completa
+
+# Esperados para Poisson
+esperados_poisson <- sapply(1:nrow(frecDatos), function(i) {
+  (ppois(intervalos[[i]][2], lambda_poisson)-ppois(intervalos[[i]][1], lambda_poisson))*sum(observados)
+})
+
+
+# Esperados para binomial negativa
+esperados_negbin <- sapply(1:nrow(frecDatos), function(i) {
+  (pnbinom(intervalos[[i]][2], size = size_negbin, mu = mu_negbin)-pnbinom(intervalos[[i]][1], size = size_negbin, mu = mu_negbin))*sum(observados)
+})
+
+
+# Prueba de bonda de ajuste
+
+# Chi-cuadrado para Poisson
+chisq_poisson <- sum((observados - esperados_poisson)^2 / esperados_poisson)
+p_val_poisson <- pchisq(chisq_poisson, df = nrow(frecDatos) - 1, lower.tail = FALSE)
+
+# Chi-cuadrado para binomial negativa
+chisq_negbin <- sum((observados - esperados_negbin)^2 / esperados_negbin)
+p_val_negbin <- pchisq(chisq_negbin, df = nrow(frecDatos)- 2, lower.tail = FALSE)
+
+# Resultados de la prueba de chi-cuadrado
+cat("Chi-cuadrado para Poisson:", chisq_poisson, "p-value:", p_val_poisson, "\n")
+cat("Chi-cuadrado para Binomial Negativa:", chisq_negbin, "p-value:", p_val_negbin, "\n")
+```
+
+Notamos que al ajustar, se valida la bondad de ajuste de los modelos de Poisson y Binomial Negativa; sin embargo, el modelo de Poisson es el que tiene un mejor AIC, parámetro que usaremos para elegir el modelo, dado que nos indica que realiza un mejor ajuste a los datos.
+
+Por último, solo mostraremos los resultados del ajuste gráficamente.
+
+```{r}
+library(ggplot2)
+
+# Crear un data frame con todos los datos
+frecDatosComp <- data.frame(
+  Rango = factor(frecDatos$Rango),
+  Observados = observados,
+  Esperados_Poisson = esperados_poisson,
+  Esperados_NegBin = esperados_negbin
+)
+
+# Convertir los datos a formato largo para ggplot2
+frecDatos_long <- reshape2::melt(frecDatosComp, id.vars = "Rango", 
+                                 variable.name = "Tipo", value.name = "Frecuencia")
+
+# Crear la gráfica de barras
+plot3 <- ggplot(frecDatos_long, aes(x = Rango, y = Frecuencia, fill = Tipo)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(title = "Comparación de los datos observados y esperados de la frecuencia por modelo y grupos",
+       x = "Rango",
+       y = "Frecuencia") +
+  scale_fill_manual(values = c("Observados" = "blue", 
+                               "Esperados_Poisson" = "red", 
+                               "Esperados_NegBin" = "green"))
+
+# Guardar el gráfico en un archivo JPG
+ggsave(filename = "ajuste_frecuencia.jpg", plot = plot3, device = "jpeg")
+
+```
+
+## Ajuste modelos de siniestralidad
+
+Procedimos a ajustar los modelos weibull, gamma, lognormal y pareto a los datos de siniestralidad. Y con los cuales obtuvimos la siguiente gráfica para comparar el ajuste, además de que realizamos una prueba Chi-cuadrado para validar la bondad de ajuste de los modelos.
+
+```{r}
+# Ajuste de los datos
+library(fitdistrplus)
+library(ggplot2)
+library(readxl)
+# Corregir los datos
+
+mydata <- read_excel("instrumentos.xlsx", sheet = "data")
+
+# Definir una función para calcular el valor intermedio
+calcular_intermedio <- function(rango) {
+  if (grepl("más de", rango)) {
+    lower <- as.numeric(gsub("[^0-9]", "", rango))
+    upper <- NA
+    intermedio <- lower * 1.5  # Asumimos un incremento del 50% como valor intermedio
+  } else {
+    nums <- as.numeric(unlist(regmatches(rango, gregexpr("[0-9]+", rango))))
+    lower <- nums[1]
+    upper <- nums[2]
+    intermedio <- mean(c(lower, upper))
+  }
+  return(intermedio)
+}
+# Aplicar la función a los datos
+mydata$Intermedio <- sapply(mydata$"¿Cuánto cuesta tu instrumento?", calcular_intermedio)
+
+# Definir los límites de los rangos
+limites <- list(c(0,1000) ,c(1000, 3000), c(3000, 5000), c(5000, 10000), c(10000, Inf))
+
+# Función de log-verosimilitud para la distribución Weibull
+logverosimilitud_weibull <- function(par) {
+  shape <- par[1]
+  scale <- par[2]
+  result <- -sum(sapply(1:nrow(sevDatos), function(i) {
+    sevDatos$Frecuencia[i] * log(pweibull(limites[[i]][2], shape, scale) - pweibull(limites[[i]][1], shape, scale))
+   }))#+sum(sevDatos$Frecuencia)*log(pweibull(deducible, shape, scale, lower.tail = FALSE))
+  return(result)
+} # empezar con c(1, 1000)
+
+
+# Función de log-verosimilitud para la distribución Gamma
+logverosimilitud_gamma <- function(par) {
+  shape <- par[1]
+  rate <- par[2]
+  result <- -sum(sapply(1:nrow(sevDatos), function(i) {
+    sevDatos$Frecuencia[i] * log(pgamma(limites[[i]][2], shape, scale = rate) - pgamma(limites[[i]][1], shape, scale = rate))
+  }))#+sum(sevDatos$Frecuencia)*log(pgamma(deducible, shape, scale = rate, lower.tail = FALSE))
+  return(result)
+}
+
+# Función de log-verosimilitud para la distribución Lognormal
+logverosimilitud_lognormal <- function(par) {
+  meanlog <- par[1]
+  sdlog <- par[2]
+  result <- -sum(sapply(1:nrow(sevDatos), function(i) {
+    sevDatos$Frecuencia[i] * log(plnorm(limites[[i]][2], meanlog, sdlog) - plnorm(limites[[i]][1], meanlog, sdlog))
+  }))#+ sum(sevDatos$Frecuencia)*log(plnorm(log(deducible), meanlog, sdlog, lower.tail = FALSE))
+  return(result)
+}
+
+# Función de log-verosimilitud para la distribución Pareto
+logverosimilitud_pareto <- function(par) {
+  shape <- par[1]
+  scale <- par[2]
+  result <- -sum(sapply(1:nrow(sevDatos), function(i) {
+    sevDatos$Frecuencia[i] * log(ppareto(limites[[i]][2], shape, scale) - ppareto(limites[[i]][1], shape, scale))
+  }))#+sum(sevDatos$Frecuencia)*log(ppareto(deducible, shape, scale, lower.tail = FALSE))
+  return(result)
+}
+# Ajustar las distribuciones utilizando optimización
+ajustar_distribucion <- function(logverosimilitud, start_params) {
+  fit <- optim(start_params, logverosimilitud)
+  return(fit)
+}
+
+# Ajustar las distribuciones
+params_weibull <- ajustar_distribucion(logverosimilitud_weibull, start_params = c(1, 1000))
+params_gamma <- ajustar_distribucion(logverosimilitud_gamma, start_params = c(10, 1000))
+params_lognormal <- ajustar_distribucion(logverosimilitud_lognormal, start_params = c(1, 1))
+params_pareto <- ajustar_distribucion(logverosimilitud_pareto, start_params = c(10, 1000))
+
+# Calcular AIC
+(AIC_weibull <- 2 * logverosimilitud_weibull(params_weibull$par) + 4)
+(AIC_gamma <- 2 * logverosimilitud_gamma(params_gamma$par) + 4)
+(AIC_lognormal <- 2 * logverosimilitud_lognormal(params_lognormal$par) + 4)
+(AIC_pareto <- 2 * logverosimilitud_pareto(params_pareto$par) + 4)
+
+# Prueba de chi-cuadrada
+
+# Calcular las frecuencias esperadas para cada distribución
+calcular_frecuencias_esperadas <- function(distribucion, params, limites, total_observaciones) {
+  p <- sapply(1:length(limites), function(i) {
+    if (distribucion == "weibull") {
+      return((pweibull(limites[[i]][2], params$par[1], params$par[2]) - 
+                pweibull(limites[[i]][1], params$par[1], params$par[2])))
+    } else if (distribucion == "gamma") {
+      return((pgamma(limites[[i]][2], params$par[1], rate = params$par[2]) - 
+                pgamma(limites[[i]][1], params$par[1], rate = params$par[2])))
+    } else if (distribucion == "lognormal") {
+      return((plnorm(log(limites[[i]][2]), params$par[1], params$par[2]) - 
+                plnorm(log(limites[[i]][1]), params$par[1], params$par[2])))
+    } else if (distribucion == "pareto") {
+      return((ppareto(limites[[i]][2], params$par[1], params$par[2]) - 
+                ppareto(limites[[i]][1], params$par[1], params$par[2])))
+    } else {
+      stop("Distribución no soportada")
+    }
+  })
+  return(p * total_observaciones)
+}
+
+
+(total_observaciones <- sum(sevDatos$Frecuencia))
+
+expected_weibull <- calcular_frecuencias_esperadas("weibull", params_weibull, limites, total_observaciones)
+expected_gamma <- calcular_frecuencias_esperadas("gamma", params_gamma, limites, total_observaciones)
+expected_lognormal <- calcular_frecuencias_esperadas("lognormal", params_lognormal, limites, total_observaciones)
+expected_pareto <- calcular_frecuencias_esperadas("pareto", params_pareto, limites, total_observaciones)
+
+# Realizar la prueba chi cuadrado para cada distribución
+observed <- sevDatos$Frecuencia
+
+(chisq_test_weibull <- chisq.test(x = observed, p = expected_weibull / sum(expected_weibull), rescale.p = TRUE, simulate.p.value = TRUE))
+(chisq_test_gamma <- chisq.test(x = observed, p = expected_gamma / sum(expected_gamma), rescale.p = TRUE, simulate.p.value = TRUE))
+(chisq_test_lognormal <- chisq.test(x = observed, p = expected_lognormal / sum(expected_lognormal), rescale.p = TRUE))
+(chisq_test_pareto <- chisq.test(x = observed, p = expected_pareto / sum(expected_pareto), rescale.p = TRUE))
+
+
+# Crear un data frame con las frecuencias observadas y esperadas
+comparacion <- data.frame(
+  Rango = rep(sevDatos$Rango, 5),
+  Frecuencia = c(sevDatos$Frecuencia, expected_weibull, expected_gamma, expected_lognormal, expected_pareto),
+  Tipo = rep(c("Observada", "Weibull", "Gamma", "Lognormal", "Pareto"), each = nrow(sevDatos))
+)
+
+# Graficar las frecuencias observadas y esperadas
+ggplot(comparacion, aes(x = Rango, y = Frecuencia, fill = Tipo)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(title = "Comparación de los datos observads y esperados de los siniestros por modelo y grupo",
+       x = "Rangos de siniestralidad",
+       y = "Frecuencia",
+       fill = "Distribución") +
+  theme_minimal() +
+  scale_fill_manual(values = c("Observada" = "black", "Weibull" = "blue", "Gamma" = "red", "Lognormal" = "green", "Pareto" = "purple"))
+
+
+```
+
+
+Con lo cual evaluando las pruebas de bondad de ajuste, la gráfica comparativa y la métrica de AIC, notamos que el modelo que mejor se ajusta a los datos es el modelo de Pareto, por lo que es el modelo que usaremos para representar siniestralidad.
+
+
+# Prima de riesgo
+
+## Supuestos
+
+El modelo de pérdida agregada para calcular la prima de riesgo promedio y la cuota de riesgo fue el siguiente:
+
+$S = \sum_{i=1}^{N} V_{i} W_{i}$
+
+Donde 
+
+- $V_{i}$ es el valor de los instrumentos que estaríamos asegurando en nuestra cartera y suponemos que por evento es aleatorio con una distribución uniforme según los rangos que aseguraremos en la cartera (0-100000).
+
+- $W_{i}$ es la severidad (porcentaje de la siniestralidad con respecto al valor del intrumentos) de los siniestros ocurridos. Esta variable es aleatoria. 
+
+- $N$ es el número de eventos que ocurrirán en el año. E igualmente es una variable aleatoria.
+
+Suponemos que las 3 variables son independientes entre sí.
+
+Dado este modelo de riesgo colectivo presentado, procedemos a calcular la prima de riesgo promedio y la cuota de riesgo.
+
+La prima de riesgo promedio para este seguro de daños de instrumentos musicales se calcula como la esperanza del modelo:
+
+$E[S] = E[\sum_{i=1}^{N} V_{i} W_{i}] = E[N] E[V] E[W]=E[N]E[VW]$
+
+Donde $E[N]$ es la esperanza del número de eventos, y $E[VW]=E[V]E[W]$ es la siniestralidad esperada que tendríamos para una cartera equilibrada de instrumentos musicales.
+
+Esta prima de riesgo promedio es lo que tendríamos que cobrar a todos los usuarios asegurados en nuestra cartera; sin embargo, para ser justos con los asegurados, tendríamos que cobrar una prima de acuerdo con el valor de los instrumentos que se cubren en la cartera, por lo que conviene calcular una cuota de riesgo que multiplicado por el valor del instrumento asegurado, nos de la prima que debemos cobrar.
+
+Con lo cual, si suscribimos equilibradamente nuestros riesgos, tendriamos que cobrar una cuota de riesgo a cada instrumento asegurado de $E[N]E[W]=E[N]E[VW]/E[V]$. Donde $E[V]$ es el valor esperado de los instrumentos asegurados en nuestra cartera equilibrada. De esta forma, cobraríamos una prima justa, y además seguiríamos cubriendo los mismos supuestos del modelo de riesgo colectivo. Cabe recalcar que este cambio solo es posible si se suscriben riesgos que en promedio sea $E[V]$.
+
+Ahora bien, para calcular esta prima de riesgo recurrimos numéricamente a simular los valores de nuestro modelo de riesgo colectivo, de acuerdo con modelos ajustados de la sección anterior para las variables aleatorias $N$ y $VW$. 
+
+## Cálculos
+
+```{r}
+# Esperanza de S
+
+# Simulación bootstrap paramétrico
+# 0 .- Ajuste de los modelos N y VW (ya calculados anteriormente los parámetros de la pareto y poisson)
+
+## Simulación de S
+# 1.- M Simulaciones de N
+# 2.- N1+...+NM Simulaciones de VW
+# 3.- Construcción de M simulaciones de S dado 1 y 2
+## Plug in
+# 4.- Promedio de S (Plugin de la esperanza de S)
+# 5.- Con los datos simulados, ajustar con fitdistrplus una distribución pareto para VW y una Poisson para N.
+# 6.- Repetir de nuevo desde 1 por B = 100000
+
+library(fitdistrplus)
+library(actuar)  # Para la distribución Pareto
+
+# Supuestos de los parámetros calculados anteriormente
+lambda_poisson <- 5  # Tasa de la distribución Poisson
+alpha_pareto <- 2    # Parámetro de forma de la distribución Pareto
+beta_pareto <- 1     # Parámetro de escala de la distribución Pareto
+
+# Número de simulaciones
+M <- 1000
+B <- 100000
+
+# Función de simulación
+simular_S <- function(lambda_poisson, alpha_pareto, beta_pareto, M) {
+  # 1. Simulaciones de N
+  N <- rpois(M, lambda_poisson)
+  
+  # 2. Simulaciones de VW
+  VW <- unlist(lapply(N, function(n) {
+    if (n == 0) return(0)
+    return(rpareto(n, shape = alpha_pareto, scale = beta_pareto))
+  }))
+  
+  # 3. Construcción de M simulaciones de S
+  S <- rep(NA, M)
+  for (i in 1:M) {
+    if (N[i] == 0) {
+      S[i] <- 0
+    } else {
+      S[i] <- sum(VW[(sum(N[1:(i-1)]) + 1):sum(N[1:i])])
+    }
+  }
+  
+  return(list(S = S, N = N, VW = VW))
+}
+
+# Inicializar vectores para almacenar resultados de cada iteración
+promedios_S <- numeric(B)
+params_poisson <- matrix(NA, nrow = B, ncol = 1)
+params_pareto <- matrix(NA, nrow = B, ncol = 2)
+
+# Repetir B veces el proceso de simulación y ajuste
+for (b in 1:B) {
+  sim_data <- simular_S(lambda_poisson, alpha_pareto, beta_pareto, M)
+  S <- sim_data$S
+  N <- sim_data$N
+  VW <- sim_data$VW[sim_data$VW > 0]  # Eliminar los ceros generados por N = 0
+  
+  # 4. Promedio de S
+  promedios_S[b] <- mean(S)
+  
+  # 5. Ajustar distribuciones con fitdistrplus
+  fit_poisson <- fitdist(N, "pois")
+  fit_pareto <- fitdist(VW, "pareto", start = list(shape = alpha_pareto, scale = beta_pareto))
+  
+  # Almacenar parámetros ajustados
+  params_poisson[b,] <- fit_poisson$estimate
+  params_pareto[b,] <- fit_pareto$estimate
+}
+
+# Resultados
+mean_promedio_S <- mean(promedios_S)
+params_poisson_mean <- colMeans(params_poisson)
+params_pareto_mean <- colMeans(params_pareto)
+
+# Calcular el error estándar bootstrap del promedio de S
+error_estandar_S <- sd(promedios_S)
+
+# Mostrar resultados
+cat("Promedio de S (Plugin de la esperanza de S):", mean_promedio_S, "\n")
+cat("Error estándar bootstrap del promedio de S:", error_estandar_S, "\n")
+cat("Parámetros ajustados para la distribución Poisson (lambda):", params_poisson_mean, "\n")
+cat("Parámetros ajustados para la distribución Pareto (shape y scale):", params_pareto_mean, "\n")
+```
+
+
 
 
 
