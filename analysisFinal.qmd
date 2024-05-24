@@ -634,13 +634,13 @@ Al final, nos daría una tarifa promedio de `r mean_promedio_S/((1-.5))` por cad
 
 Para la RRC, debemos reservar por un año un porcentaje por cada póliza vendida, este porcentaje se calcula de la siguiente forma para cada póliza vendida:
 
-$$RRC\% = \frac{\text{primaRiesgo}}{\text{primaTarifa}} = `r (1-.4)`$$
+$$RRC\% = \frac{\text{primaRiesgo}}{\text{primaTarifa}} = `r (1-.5)`$$
 
 Suponemos que en todos los años las pólizas se adquieren uniformemente a lo largo del año, y se devengan uniformemente por el plazo del seguro renovable, que es un año. Por lo que en un año, de todo lo que se venda en pólizas se debe reservar la mitad de la prima de riesgo promedio.
 
 # ROPC
 
-Como no tenemos experiencia en el mercado, proponemos un ROPC del 100% de la prima de riesgo promedio, es decir, `r (1-.4) ` por cada póliza vendida. Ya cuando generemos experiencia, podremos ajustar este parámetro.
+Como no tenemos experiencia en el mercado, proponemos un ROPC del 100% de la prima de riesgo promedio, es decir, `r (1-.5) ` por cada póliza vendida. Ya cuando generemos experiencia, podremos ajustar este parámetro.
 
 
 
