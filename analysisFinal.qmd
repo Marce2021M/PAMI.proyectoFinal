@@ -29,13 +29,13 @@ library(actuar)
 # Dataframe con la severidad de los siniestros
 sevDatos <- data.frame(
   Rango = c("0-1000", "1000-3000", "3000-5000", "5000-10000", "+10000"),
-  Frecuencia = c(79, 37, 4, 6, 9)
+  Frecuencia = c(189, 36, 5, 5, 6)
 )
 
 sevDatos
 # Dataframe con la frecuencia de los siniestros
 frecDatos <- data.frame(
-  Rango = c("0--1", "2--3", "3--4"),
+  Rango = c("[0,1]", "[2,3]", "[3,4]"),
   Completa = c(56, 12, 2)
 )
 
@@ -84,7 +84,7 @@ frecDatos$Porcentaje <- frecDatos$Completa / sum(frecDatos$Completa) * 100
 
 # Definir los niveles deseados en el orden correcto
 
-niveles_deseados <- c("0--1", "2--3", "3--4")
+niveles_deseados <- c("[0,1]", "[2,3]", "[3,4]")
 
 # Convertir Rango a factor con el orden deseado
 
@@ -202,7 +202,7 @@ frecDatos_long <- reshape2::melt(frecDatosComp, id.vars = "Rango",
 # Crear la gráfica de barras
 plot3 <- ggplot(frecDatos_long, aes(x = Rango, y = Frecuencia, fill = Tipo)) +
   geom_bar(stat = "identity", position = "dodge") +
-  labs(title = "Comparación de los datos observados y esperados de la frecuencia por modelo y grupos",
+  labs(title = "Comparación de ajustes de distribución de frecuencias",
        x = "Rango",
        y = "Frecuencia") +
   scale_fill_manual(values = c("Observados" = "blue", 
@@ -358,7 +358,7 @@ comparacion <- data.frame(
 # Graficar las frecuencias observadas y esperadas
 ggplot(comparacion, aes(x = Rango, y = Frecuencia, fill = Tipo)) +
   geom_bar(stat = "identity", position = "dodge") +
-  labs(title = "Comparación de los datos observads y esperados de los siniestros por modelo y grupo",
+  labs(title = "Comparación de ajustes de siniestralidad",
        x = "Rangos de siniestralidad",
        y = "Frecuencia",
        fill = "Distribución") +
@@ -418,12 +418,13 @@ library(actuar)  # Para la distribución Pareto
 library(parallel)
 set.seed(191654)
 # Supuestos de los parámetros calculados anteriormente
-deducible <- 1000    # Deducible para ajustar los valores de VW
+deducible <- 2000    # Deducible para ajustar los valores de VW
 lambda_poisson <- lambda_poisson  # Tasa de la distribución Poisson
 alpha_pareto <- params_pareto$par[1]    # Parámetro de forma de la distribución Pareto
 beta_pareto <- params_pareto$par[2]     # Parámetro de escala de la distribución Pareto
-
-limAseg <- 80000  # Límite de la aseguradora
+coaseguro <- 1 # lo que tendría que pagar la aseguradora
+limAseg <- 100000  # Límite de la aseguradora
+promedioInstrumentos <- 20691
 # Número de simulaciones
 M <- 10000
 B <- 10000
@@ -440,7 +441,7 @@ simular_S <- function(lambda_poisson, alpha_pareto, beta_pareto, deducible, M) {
     valores[valores > deducible] <- valores[valores > deducible] - deducible
     valores[valores <= deducible] <- 0
     valores[valores > limAseg] <- limAseg
-    return(valores*.95)
+    return(valores*coaseguro)
   })
   
   # 3. Construcción de M simulaciones de S
@@ -459,7 +460,7 @@ simular_bootstrap <- function(iter, lambda_poisson, alpha_pareto, beta_pareto, d
 
 # Configurar clúster para paralelización
 cl <- makeCluster(detectCores() - 1)
-clusterExport(cl, c("lambda_poisson", "alpha_pareto", "beta_pareto", "deducible", "M", "simular_S", "rpois", "rpareto", "sapply", "unlist", "limAseg"))
+clusterExport(cl, c("lambda_poisson", "alpha_pareto", "beta_pareto", "deducible", "M", "simular_S", "rpois", "rpareto", "sapply", "unlist", "limAseg", "coaseguro"))
 
 # Ejecutar simulaciones en paralelo
 promedios_S <- parSapply(cl, 1:B, simular_bootstrap, lambda_poisson, alpha_pareto, beta_pareto, deducible, M)
@@ -478,9 +479,9 @@ cat("Error estándar bootstrap del promedio de S:", error_estandar_S, "\n")
 
 Es decir, la cuota de riesgo que tendríamos que cobrar a cada instrumento asegurado en nuestra cartera equilibrada sería de 
 
-$$E[VW]/E[V] = \frac{`r mean_promedio_S`}{`r mean(mydata$Intermedio)`}$$
+$$E[VW]/E[V] = \frac{`r mean_promedio_S`}{`r promedioInstrumentos`}$$
 
-`r mean_promedio_S/mean(mydata$Intermedio)`.
+`r mean_promedio_S/promedioInstrumentos`.
 
 Para terminar de validar el ajuste presentamos el histograma de la distribución boostrap de la siniestralidad esperada agregada.
 
@@ -544,7 +545,7 @@ simular_S <- function(lambda_poisson, alpha_pareto, beta_pareto, deducible, M) {
     valores[valores > deducible] <- valores[valores > deducible] - deducible
     valores[valores <= deducible] <- 0
     valores[valores > limAseg] <- limAseg
-    return(valores*.95)
+    return(valores*coaseguro)
   })
   
   # 3. Construcción de M simulaciones de S
@@ -565,7 +566,7 @@ simular_bootstrap <- function(iter, lambda_poisson, alpha_pareto, beta_pareto, d
 
 # Configurar clúster para paralelización
 cl <- makeCluster(detectCores() - 1)
-clusterExport(cl, c("lambda_poisson", "alpha_pareto", "beta_pareto", "deducible", "M", "simular_S", "rpois", "rpareto", "sapply", "unlist", "limAseg"))
+clusterExport(cl, c("lambda_poisson", "alpha_pareto", "beta_pareto", "deducible", "M", "simular_S", "rpois", "rpareto", "sapply", "unlist", "limAseg", "coaseguro"))
 
 # Ejecutar simulaciones en paralelo
 cuantiles_S <- parSapply(cl, 1:B, simular_bootstrap, lambda_poisson, alpha_pareto, beta_pareto, deducible, M)
@@ -626,7 +627,7 @@ Por lo tanto, el RCS total que tendríamos que tener para asegurar los riesgos d
 
 Para la tarificación de los seguros de instrumentos musicales, se propone una tarifa de acuerdo con la cuota de riesgo calculada anteriormente, pero agregamos gastos administrativos del 10% de la cuota de riesgo, utilidad del 20%, y un margen de seguridad del 20% de la cuota de riesgo.
 
-Por lo tanto, la cuota de tarifa que proponemos para el seguro de instrumentos musicales es de `r mean_promedio_S/(mean(mydata$Intermedio) * (1-.5))` por cada instrumento asegurado.
+Por lo tanto, la cuota de tarifa que proponemos para el seguro de instrumentos musicales es de `r mean_promedio_S/(promedioInstrumentos * (1-.5))` por cada instrumento asegurado.
 
 Al final, nos daría una tarifa promedio de `r mean_promedio_S/((1-.5))` por cada instrumento asegurado.
 
