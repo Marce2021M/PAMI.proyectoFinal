@@ -10,11 +10,7 @@ nocite: |
 cache : true
 ---
 
-# Supuestos, bases y datos
-
-
-
-# Modelos
+# Datos
 
 ```{r, message=FALSE, warning=FALSE}
 # Corremos librerías
@@ -40,6 +36,20 @@ frecDatos <- data.frame(
 )
 
 frecDatos
+
+# Crear un dataframe con los datos de la imagen
+rango <- c("[0-.05]", "(0.05-0.1]", "(0.1-0.15]", "(0.15-0.2]", "(0.2-0.25]", 
+           "(0.25-0.3]", "(0.3-0.35]", "(0.35-0.4]", "(0.4-0.45]", "(0.45-0.5]", 
+           "(0.5-0.55]", "(0.55-0.6]", "(0.6-0.65]", "(0.65-0.7]", "(0.7-0.75]", 
+           "(0.75-0.8]", "(0.8-0.85]", "(0.85-0.9]", "(0.9-0.95]", "(0.95-1]")
+
+frecuencia <- c(189, 36, 5, 0, 5, 0, 0, 0, 0, 6, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2)
+
+
+# Crear el dataframe
+sevDatos <- data.frame(Rango = factor(rango, levels = rango), Frecuencia = frecuencia)
+
+# Mostrar el dataframe
 ```
 
 
@@ -47,30 +57,6 @@ frecDatos
 
 ### Siniestralidad
 
-```{r, message=FALSE, warning=FALSE}
-# Histograma de la severidad
-
-# Calcular los porcentajes
-sevDatos$Porcentaje <- sevDatos$Frecuencia / sum(sevDatos$Frecuencia) * 100
-
-# Definir los niveles deseados en el orden correcto
-niveles_deseados <- c("0-1000", "1000-3000", "3000-5000", "5000-10000", "+10000")
-
-# Convertir Rango a factor con el orden deseado
-sevDatos$Rango <- factor(sevDatos$Rango, levels = niveles_deseados)
-
-# Crear la gráfica con ggplot2
-library(ggplot2)
-(plot1 <- ggplot(sevDatos, aes(x = Rango, y = Porcentaje)) +
-  geom_bar(stat = "identity") +
-  labs(title = "Datos agrupados de los montos de la siniestralidad al año",
-       x = "Monto de siniestralidad",
-       y = "Porcentaje del total de casos") +
-  scale_y_continuous(labels = scales::percent_format(scale = 1)))
-
-# Guardar el gráfico en un archivo JPG
-ggsave(filename = "histograma_severidad_porc.jpg", plot = plot1, device = "jpeg")
-```
 
 Con lo cual notamos que para la siniestralidad de estos datos, los modelos que convienen deben de ser colas pesadas o medio pesadas, dado que se ve un ligero incremento final en la siniesralidad..
 
@@ -218,6 +204,7 @@ ggsave(filename = "ajuste_frecuencia.jpg", plot = plot3, device = "jpeg")
 
 Procedimos a ajustar los modelos weibull, gamma, lognormal y pareto a los datos de siniestralidad. Y con los cuales obtuvimos la siguiente gráfica para comparar el ajuste, además de que realizamos una prueba Chi-cuadrado para validar la bondad de ajuste de los modelos.
 
+
 ```{r, message=FALSE, warning=FALSE}
 # Ajuste de los datos
 library(fitdistrplus)
@@ -227,68 +214,42 @@ library(readxl)
 
 set.seed(191654)
 
-mydata <- read_excel("instrumentos.xlsx", sheet = "data")
+limites <- list(c(0, 0.05), c(0.05, 0.1), c(0.1, 0.15), c(0.15, 0.2), c(0.2, 0.25), 
+             c(0.25, 0.3), c(0.3, 0.35), c(0.35, 0.4), c(0.4, 0.45), c(0.45, 0.5), 
+             c(0.5, 0.55), c(0.55, 0.6), c(0.6, 0.65), c(0.65, 0.7), c(0.7, 0.75), 
+             c(0.75, 0.8), c(0.8, 0.85), c(0.85, 0.9), c(0.9, 0.95), c(0.95, 1))
 
-# Definir una función para calcular el valor intermedio
-calcular_intermedio <- function(rango) {
-  if (grepl("más de", rango)) {
-    lower <- as.numeric(gsub("[^0-9]", "", rango))
-    upper <- NA
-    intermedio <- lower * 1.5  # Asumimos un incremento del 50% como valor intermedio
-  } else {
-    nums <- as.numeric(unlist(regmatches(rango, gregexpr("[0-9]+", rango))))
-    lower <- nums[1]
-    upper <- nums[2]
-    intermedio <- mean(c(lower, upper))
-  }
-  return(intermedio)
-}
-# Aplicar la función a los datos
-mydata$Intermedio <- sapply(mydata$"¿Cuánto cuesta tu instrumento?", calcular_intermedio)
 
-# Definir los límites de los rangos
-limites <- list(c(0,1000) ,c(1000, 3000), c(3000, 5000), c(5000, 10000), c(10000, Inf))
 
-# Función de log-verosimilitud para la distribución Weibull
-logverosimilitud_weibull <- function(par) {
-  shape <- par[1]
-  scale <- par[2]
+logverosimilitud_beta <- function(params) {
+  shape1 <- params[1]
+  shape2 <- params[2]
   result <- -sum(sapply(1:nrow(sevDatos), function(i) {
-    sevDatos$Frecuencia[i] * log(pweibull(limites[[i]][2], shape, scale) - pweibull(limites[[i]][1], shape, scale))
-   }))#+sum(sevDatos$Frecuencia)*log(pweibull(deducible, shape, scale, lower.tail = FALSE))
-  return(result)
-} # empezar con c(1, 1000)
-
-
-# Función de log-verosimilitud para la distribución Gamma
-logverosimilitud_gamma <- function(par) {
-  shape <- par[1]
-  rate <- par[2]
-  result <- -sum(sapply(1:nrow(sevDatos), function(i) {
-    sevDatos$Frecuencia[i] * log(pgamma(limites[[i]][2], shape, scale = rate) - pgamma(limites[[i]][1], shape, scale = rate))
-  }))#+sum(sevDatos$Frecuencia)*log(pgamma(deducible, shape, scale = rate, lower.tail = FALSE))
+    sevDatos$Frecuencia[i] * log(pbeta(limites[[i]][2], shape1 = shape1, shape2 = shape2) - 
+                                 pbeta(limites[[i]][1], shape1 = shape1, shape2 = shape2))
+  }))
   return(result)
 }
 
-# Función de log-verosimilitud para la distribución Lognormal
-logverosimilitud_lognormal <- function(par) {
-  meanlog <- par[1]
-  sdlog <- par[2]
+pmezclaBeta <- function(x, shape1, shape2, shape3, shape4, p) {
+  p * pbeta(x, shape1, shape2) + (1 - p) * pbeta(x, shape3, shape4)
+}
+
+
+logverosimilitud_mezcla_beta <- function(params) {
+  shape1 <- params[1]
+  shape2 <- params[2]
+  shape3 <- params[3]
+  shape4 <- params[4]
+  p <- params[5]
   result <- -sum(sapply(1:nrow(sevDatos), function(i) {
-    sevDatos$Frecuencia[i] * log(plnorm(limites[[i]][2], meanlog, sdlog) - plnorm(limites[[i]][1], meanlog, sdlog))
-  }))#+ sum(sevDatos$Frecuencia)*log(plnorm(log(deducible), meanlog, sdlog, lower.tail = FALSE))
+    sevDatos$Frecuencia[i] * log(pmezclaBeta(limites[[i]][2], shape1 = shape1, shape2 = shape2, shape3 = shape3, shape4 = shape4, p) - 
+    pmezclaBeta(limites[[i]][1], shape1 = shape1, shape2 = shape2, shape3 = shape3, shape4 = shape4, p))
+  }))
   return(result)
 }
 
-# Función de log-verosimilitud para la distribución Pareto
-logverosimilitud_pareto <- function(par) {
-  shape <- par[1]
-  scale <- par[2]
-  result <- -sum(sapply(1:nrow(sevDatos), function(i) {
-    sevDatos$Frecuencia[i] * log(ppareto(limites[[i]][2], shape, scale) - ppareto(limites[[i]][1], shape, scale))
-  }))#+sum(sevDatos$Frecuencia)*log(ppareto(deducible, shape, scale, lower.tail = FALSE))
-  return(result)
-}
+
 # Ajustar las distribuciones utilizando optimización
 ajustar_distribucion <- function(logverosimilitud, start_params) {
   fit <- optim(start_params, logverosimilitud)
@@ -296,63 +257,48 @@ ajustar_distribucion <- function(logverosimilitud, start_params) {
 }
 
 # Ajustar las distribuciones
-params_weibull <- ajustar_distribucion(logverosimilitud_weibull, start_params = c(1, 1000))
-params_gamma <- ajustar_distribucion(logverosimilitud_gamma, start_params = c(10, 1000))
-params_lognormal <- ajustar_distribucion(logverosimilitud_lognormal, start_params = c(1, 1))
-params_pareto <- ajustar_distribucion(logverosimilitud_pareto, start_params = c(10, 1000))
+params_beta <- ajustar_distribucion(logverosimilitud_beta, start_params = c(.5, .5))
+
 
 # Calcular AIC
-(AIC_weibull <- 2 * logverosimilitud_weibull(params_weibull$par) + 4)
-(AIC_gamma <- 2 * logverosimilitud_gamma(params_gamma$par) + 4)
-(AIC_lognormal <- 2 * logverosimilitud_lognormal(params_lognormal$par) + 4)
-(AIC_pareto <- 2 * logverosimilitud_pareto(params_pareto$par) + 4)
+(AIC_beta <- 2 * logverosimilitud_beta(params_beta$par) + 4)
 
 # Prueba de chi-cuadrada
 
 # Calcular las frecuencias esperadas para cada distribución
 calcular_frecuencias_esperadas <- function(distribucion, params, limites, total_observaciones) {
+    p <- params$par[5]
+    shape3 <- params$par[3]
+    shape4 <- params$par[4]
+    shape1 <- params$par[1]
+    shape2 <- params$par[2]
   p <- sapply(1:length(limites), function(i) {
-    if (distribucion == "weibull") {
-      return((pweibull(limites[[i]][2], params$par[1], params$par[2]) - 
-                pweibull(limites[[i]][1], params$par[1], params$par[2])))
-    } else if (distribucion == "gamma") {
-      return((pgamma(limites[[i]][2], params$par[1], rate = params$par[2]) - 
-                pgamma(limites[[i]][1], params$par[1], rate = params$par[2])))
-    } else if (distribucion == "lognormal") {
-      return((plnorm(log(limites[[i]][2]), params$par[1], params$par[2]) - 
-                plnorm(log(limites[[i]][1]), params$par[1], params$par[2])))
-    } else if (distribucion == "pareto") {
-      return((ppareto(limites[[i]][2], params$par[1], params$par[2]) - 
-                ppareto(limites[[i]][1], params$par[1], params$par[2])))
+    if (distribucion == "beta") {
+      return(pbeta(limites[[i]][2], shape1 = params$par[1], shape2 = params$par[2]) - pbeta(limites[[i]][1],  shape1 = params$par[1], shape2 = params$par[2]))
     } else {
       stop("Distribución no soportada")
     }
   })
   return(p * total_observaciones)
-}
+}       
 
 
 (total_observaciones <- sum(sevDatos$Frecuencia))
 
-expected_weibull <- calcular_frecuencias_esperadas("weibull", params_weibull, limites, total_observaciones)
-expected_gamma <- calcular_frecuencias_esperadas("gamma", params_gamma, limites, total_observaciones)
-expected_lognormal <- calcular_frecuencias_esperadas("lognormal", params_lognormal, limites, total_observaciones)
-expected_pareto <- calcular_frecuencias_esperadas("pareto", params_pareto, limites, total_observaciones)
+expected_beta <- calcular_frecuencias_esperadas("beta", params_beta, limites, total_observaciones)
+
 
 # Realizar la prueba chi cuadrado para cada distribución
 observed <- sevDatos$Frecuencia
 
-(chisq_test_weibull <- chisq.test(x = observed, p = expected_weibull / sum(expected_weibull), rescale.p = TRUE, simulate.p.value = TRUE))
-(chisq_test_gamma <- chisq.test(x = observed, p = expected_gamma / sum(expected_gamma), rescale.p = TRUE, simulate.p.value = TRUE))
-(chisq_test_lognormal <- chisq.test(x = observed, p = expected_lognormal / sum(expected_lognormal), rescale.p = TRUE))
-(chisq_test_pareto <- chisq.test(x = observed, p = expected_pareto / sum(expected_pareto), rescale.p = TRUE))
+(chisq_test_beta <- chisq.test(x = observed, p = expected_beta / sum(expected_beta), rescale.p = TRUE, simulate.p.value = TRUE))
 
 
 # Crear un data frame con las frecuencias observadas y esperadas
 comparacion <- data.frame(
-  Rango = rep(sevDatos$Rango, 5),
-  Frecuencia = c(sevDatos$Frecuencia, expected_weibull, expected_gamma, expected_lognormal, expected_pareto),
-  Tipo = rep(c("Observada", "Weibull", "Gamma", "Lognormal", "Pareto"), each = nrow(sevDatos))
+  Rango = rep(sevDatos$Rango, 2),
+  Frecuencia = c(sevDatos$Frecuencia, expected_beta),
+  Tipo = rep(c("Observada", "beta"), each = nrow(sevDatos))
 )
 
 # Graficar las frecuencias observadas y esperadas
@@ -363,7 +309,8 @@ ggplot(comparacion, aes(x = Rango, y = Frecuencia, fill = Tipo)) +
        y = "Frecuencia",
        fill = "Distribución") +
   theme_minimal() +
-  scale_fill_manual(values = c("Observada" = "black", "Weibull" = "blue", "Gamma" = "red", "Lognormal" = "green", "Pareto" = "purple"))
+  scale_fill_manual(values = c("Observada" = "black", "beta" = "gray"))+
+    theme(axis.text.x = element_text(angle = 90, hjust = 1))
 
 
 ```
@@ -376,37 +323,30 @@ Con lo cual evaluando las pruebas de bondad de ajuste, la gráfica comparativa y
 
 ## Supuestos
 
-El modelo de pérdida agregada para calcular la prima de riesgo promedio y la cuota de riesgo fue el siguiente:
+El modelo de severidad agregada para calcular la prima de riesgo promedio y la cuota de riesgo fue el siguiente:
 
-$$S = \sum_{i=1}^{N} V_{i} W_{i}$$
+$$S = \sum_{i=1}^{N} W_{i}$$
 
 Donde 
-
-- $V_{i}$ es el valor de los instrumentos que estaríamos asegurando en nuestra cartera y suponemos que por evento es aleatorio con una distribución uniforme según los rangos que aseguraremos en la cartera (0-100000).
 
 - $W_{i}$ es la severidad (porcentaje de la siniestralidad con respecto al valor del intrumentos) de los siniestros ocurridos. Esta variable es aleatoria. 
 
 - $N$ es el número de eventos que ocurrirán en el año. E igualmente es una variable aleatoria.
 
-Suponemos que las 3 variables son independientes entre sí.
+Suponemos que las 2 variables son independientes entre sí.
 
 Dado este modelo de riesgo colectivo presentado, procedemos a calcular la prima de riesgo promedio y la cuota de riesgo.
 
 La prima de riesgo promedio para este seguro de daños de instrumentos musicales se calcula como la esperanza del modelo:
 
-$$E[S] = E[\sum_{i=1}^{N} V_{i} W_{i}] = E[N] E[V] E[W]=E[N]E[VW]$$
+$$E[S] = E[\sum_{i=1}^{N} W_{i}] = E[N] E[W]=E[N]E[W]$$
 
 Donde $E[N]$ es la esperanza del número de eventos, y $E[VW]=E[V]E[W]$ es la siniestralidad esperada que tendríamos para una cartera equilibrada de instrumentos musicales.
 
-Esta prima de riesgo promedio es lo que tendríamos que cobrar a todos los usuarios asegurados en nuestra cartera; sin embargo, para ser justos con los asegurados, tendríamos que cobrar una prima de acuerdo con el valor de los instrumentos que se cubren en la cartera, por lo que conviene calcular una cuota de riesgo que multiplicado por el valor del instrumento asegurado, nos de la prima que debemos cobrar.
 
-Con lo cual, si suscribimos equilibradamente nuestros riesgos, tendriamos que cobrar una cuota de riesgo a cada instrumento asegurado de $E[N]E[W]=E[N]E[VW]/E[V]$. Donde $E[V]$ es el valor esperado de los instrumentos asegurados en nuestra cartera equilibrada. De esta forma, cobraríamos una prima justa, y además seguiríamos cubriendo los mismos supuestos del modelo de riesgo colectivo. Cabe recalcar que este cambio solo es posible si se suscriben riesgos que en promedio sea $E[V]$.
+Ahora bien, para calcular esta prima de riesgo recurrimos numéricamente a simular los valores de nuestro modelo de riesgo colectivo, de acuerdo con modelos ajustados de la sección anterior para las variables aleatorias $N$ y $W$. 
 
-Ahora bien, para calcular esta prima de riesgo recurrimos numéricamente a simular los valores de nuestro modelo de riesgo colectivo, de acuerdo con modelos ajustados de la sección anterior para las variables aleatorias $N$ y $VW$. 
-
-En este caso hay que notar, que para evitar muchas siniestralidades pequeñas se ha decidido que el deducible sea de 1000, coaseguro del 10%, y que el límite de la aseguradora sea de 100000.
-
-Con lo cual, para nosotros nuestro riesgo de siniestralidad está medido de acuerdo con la siguiente variable $VW = \text{min}((X-1000)_{+}, 100000)$
+Con lo cual, para nosotros nuestro riesgo de siniestralidad está medido de acuerdo con la siguiente variable $VW = \text{min}((X-2000)_{+}, 100000)$
 
 ## Cálculos
 
@@ -418,30 +358,26 @@ library(actuar)  # Para la distribución Pareto
 library(parallel)
 set.seed(191654)
 # Supuestos de los parámetros calculados anteriormente
-deducible <- 2000    # Deducible para ajustar los valores de VW
+deducible <- .05   # Deducible para ajustar los valores de VW
 lambda_poisson <- lambda_poisson  # Tasa de la distribución Poisson
-alpha_pareto <- params_pareto$par[1]    # Parámetro de forma de la distribución Pareto
-beta_pareto <- params_pareto$par[2]     # Parámetro de escala de la distribución Pareto
-coaseguro <- 1 # lo que tendría que pagar la aseguradora
-limAseg <- 100000  # Límite de la aseguradora
-promedioInstrumentos <- 20691
+alpha_beta <- params_beta$par[1]    # Parámetro de forma de la distribución Pareto
+beta_beta <- params_beta$par[2]     # Parámetro de escala de la distribución Pareto
 # Número de simulaciones
 M <- 10000
 B <- 10000
 
 # Función de simulación optimizada
-simular_S <- function(lambda_poisson, alpha_pareto, beta_pareto, deducible, M) {
+simular_S <- function(lambda_poisson, alpha_beta, beta_beta, deducible, M) {
   # 1. Simulaciones de N
   N <- rpois(M, lambda_poisson)
   
   # 2. Simulaciones de VW
   VW <- lapply(N, function(n) {
     if (n == 0) return(0)
-    valores <- rpareto(n, shape = alpha_pareto, scale = beta_pareto)
+    valores <- rbeta(n, shape1 = alpha_beta, shape2 = beta_beta)
     valores[valores > deducible] <- valores[valores > deducible] - deducible
     valores[valores <= deducible] <- 0
-    valores[valores > limAseg] <- limAseg
-    return(valores*coaseguro)
+    return(valores)
   })
   
   # 3. Construcción de M simulaciones de S
@@ -453,17 +389,17 @@ simular_S <- function(lambda_poisson, alpha_pareto, beta_pareto, deducible, M) {
 }
 
 # Función para ejecutar el proceso en paralelo
-simular_bootstrap <- function(iter, lambda_poisson, alpha_pareto, beta_pareto, deducible, M) {
-  sim_data <- simular_S(lambda_poisson, alpha_pareto, beta_pareto, deducible, M)
+simular_bootstrap <- function(iter, lambda_poisson, alpha_beta, beta_beta, deducible, M) {
+  sim_data <- simular_S(lambda_poisson, alpha_beta, beta_beta, deducible, M)
   mean(sim_data$S)
 }
 
 # Configurar clúster para paralelización
 cl <- makeCluster(detectCores() - 1)
-clusterExport(cl, c("lambda_poisson", "alpha_pareto", "beta_pareto", "deducible", "M", "simular_S", "rpois", "rpareto", "sapply", "unlist", "limAseg", "coaseguro"))
+clusterExport(cl, c("lambda_poisson", "alpha_beta", "beta_beta", "deducible", "M", "simular_S", "rpois", "rbeta", "sapply", "unlist"))
 
 # Ejecutar simulaciones en paralelo
-promedios_S <- parSapply(cl, 1:B, simular_bootstrap, lambda_poisson, alpha_pareto, beta_pareto, deducible, M)
+promedios_S <- parSapply(cl, 1:B, simular_bootstrap, lambda_poisson, alpha_beta, beta_beta, deducible, M)
 
 # Detener clúster
 #stopCluster(cl)
@@ -499,7 +435,7 @@ df_acumulados <- data.frame(
 
 # Crear el histograma para los valores acumulados
 (plot_acumulado <- ggplot(df_acumulados, aes(x = Promedio_Acumulado_S)) +
-  geom_histogram(binwidth = 3, fill = "blue", color = "black", alpha = 0.7) +
+  geom_histogram(binwidth = .001, fill = "blue", color = "black", alpha = 0.7) +
   labs(title = "Histograma de los Promedios Acumulados de S",
        x = "Valor Promedio Acumulado de S",
        y = "Frecuencia") +
@@ -533,43 +469,19 @@ Por lo tanto, para el cálculo del RCS, procedemos a calcular el RCS técnico y 
 M <- 10000
 B <- 10000
 
-# Función de simulación optimizada
-simular_S <- function(lambda_poisson, alpha_pareto, beta_pareto, deducible, M) {
-  # 1. Simulaciones de N
-  N <- rpois(M, lambda_poisson)
-  
-  # 2. Simulaciones de VW
-  VW <- lapply(N, function(n) {
-    if (n == 0) return(0)
-    valores <- rpareto(n, shape = alpha_pareto, scale = beta_pareto)
-    valores[valores > deducible] <- valores[valores > deducible] - deducible
-    valores[valores <= deducible] <- 0
-    valores[valores > limAseg] <- limAseg
-    return(valores*coaseguro)
-  })
-  
-  # 3. Construcción de M simulaciones de S
- # Calcular el percentil 99.5 de S
-  S <- sapply(VW, sum)
-
-  
-  VW <- unlist(VW)
-  
-  return(list(S = S, N = N, VW = VW))
-}
 
 # Función para ejecutar el proceso en paralelo
-simular_bootstrap <- function(iter, lambda_poisson, alpha_pareto, beta_pareto, deducible, M) {
-  sim_data <- simular_S(lambda_poisson, alpha_pareto, beta_pareto, deducible, M)
+simular_bootstrap <- function(iter, lambda_poisson, alpha_beta, beta_beta, deducible, M) {
+  sim_data <- simular_S(lambda_poisson, alpha_beta, beta_beta, deducible, M)
   quantile(sim_data$S, 0.995)
 }
 
 # Configurar clúster para paralelización
 cl <- makeCluster(detectCores() - 1)
-clusterExport(cl, c("lambda_poisson", "alpha_pareto", "beta_pareto", "deducible", "M", "simular_S", "rpois", "rpareto", "sapply", "unlist", "limAseg", "coaseguro"))
+clusterExport(cl, c("lambda_poisson", "alpha_beta", "beta_beta", "deducible", "M", "simular_S", "rpois", "rbeta", "sapply", "unlist", "quantile"))
 
 # Ejecutar simulaciones en paralelo
-cuantiles_S <- parSapply(cl, 1:B, simular_bootstrap, lambda_poisson, alpha_pareto, beta_pareto, deducible, M)
+cuantiles_S <- parSapply(cl, 1:B, simular_bootstrap, lambda_poisson, alpha_beta, beta_beta, deducible, M)
 
 # Detener clúster
 #stopCluster(cl)
