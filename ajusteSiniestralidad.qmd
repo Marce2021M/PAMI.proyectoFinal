@@ -191,9 +191,9 @@ plot3 <- ggplot(frecDatos_long, aes(x = Rango, y = Frecuencia, fill = Tipo)) +
   labs(title = "Comparación de ajustes de distribución de frecuencias",
        x = "Rango",
        y = "Frecuencia") +
-  scale_fill_manual(values = c("Observados" = "blue", 
-                               "Esperados_Poisson" = "red", 
-                               "Esperados_NegBin" = "green"))
+  scale_fill_manual(values = c("Observados" = "#F77E12",  # Color azul en HEX
+                               "Esperados_Poisson" = "#7F6AA5",  # Color naranja en HEX
+                               "Esperados_NegBin" = "#F23E64"))  # Color verde en HEX
 
 # Guardar el gráfico en un archivo JPG
 ggsave(filename = "ajuste_frecuencia.jpg", plot = plot3, device = "jpeg")
@@ -309,10 +309,10 @@ ggplot(comparacion, aes(x = Rango, y = Frecuencia, fill = Tipo)) +
        y = "Frecuencia",
        fill = "Distribución") +
   theme_minimal() +
-  scale_fill_manual(values = c("Observada" = "black", "beta" = "gray"))+
+  scale_fill_manual(values = c("Observada" = "#34A1DA", "beta" = "#F23E64"))+
     theme(axis.text.x = element_text(angle = 90, hjust = 1))
 
-
+ggsave(filename = "ajuste_siniestralidad.jpg", plot = last_plot(), device = "jpeg")
 ```
 
 
