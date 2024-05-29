@@ -558,7 +558,57 @@ Como no tenemos experiencia en el mercado, proponemos un ROPC del 100% de la pri
 
 
 
+```{r}
+# Crear el dataframe con los datos de la imagen
+df <- data.frame(
+  Rango = c("[0,1]", "[2-3]", "[3-4]"),
+  Frecuencia_Relativa = c(0.8, 0.17142857, 0.02857143)
+)
 
+# Crear el gráfico de barras con ggplot2
+library(ggplot2)
+
+(plot <- ggplot(df, aes(x = Rango, y = Frecuencia_Relativa, fill = Rango)) +
+  geom_bar(stat = "identity") +
+  labs(title = "Frecuencia de siniestros al año",
+       x = "Rango",
+       y = "Frecuencia Relativa") +
+  scale_fill_manual(values = c("[0,1]" = "#F23E64", 
+                               "[2-3]" = "#F23E64",  
+                               "[3-4]" = "#F23E64")) +
+  theme_minimal()+
+  theme(legend.position = "none", plot.title = element_text(size = 20, face = "bold", hjust=.5),  # Título
+        axis.title = element_text(size = 16),  # Títulos de los ejes
+        axis.text = element_text(size = 14))  )
+
+# Crear el dataframe con los datos de la imagen
+
+# Crear un dataframe con los datos de la imagen
+rango <- c("[0-.05]", "(0.05-0.1]", "(0.1-0.15]", "(0.15-0.2]", "(0.2-0.25]", 
+           "(0.25-0.3]", "(0.3-0.35]", "(0.35-0.4]", "(0.4-0.45]", "(0.45-0.5]", 
+           "(0.5-0.55]", "(0.55-0.6]", "(0.6-0.65]", "(0.65-0.7]", "(0.7-0.75]", 
+           "(0.75-0.8]", "(0.8-0.85]", "(0.85-0.9]", "(0.9-0.95]", "(0.95-1]")
+
+frecuencia <- c(0.78, 0.15, 0.02, 0.02, 0.02, 0, 0, 0, 0, 0.02, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.01)
+# Crear el dataframe
+df <- data.frame(Rango = factor(rango, levels = rango), Frecuencia = frecuencia)
+
+
+
+(plot <- ggplot(df, aes(x = Rango, y = frecuencia, fill = Rango)) +
+  geom_bar(stat = "identity", fill = "#1f77b4") +  # Usar un solo color HEX
+  labs(title = "Severidad de los siniestros al año",
+       x = "Rango",
+       y = "Frecuencia Relativa") +
+  theme_minimal() +
+  theme(
+    legend.position = "none",  # Eliminar la leyenda
+    plot.title = element_text(size = 20, face = "bold", hjust = 0.5),  # Título centrado
+    axis.title = element_text(size = 16),  # Títulos de los ejes
+    axis.text = element_text(size = 14),  # Texto de los ejes
+    axis.text.x = element_text(angle = 45, hjust = 1 )
+  ))
+```
 
 
 

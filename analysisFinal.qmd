@@ -545,7 +545,9 @@ simular_S <- function(lambda_poisson, alpha_pareto, beta_pareto, deducible, M) {
     valores[valores > deducible] <- valores[valores > deducible] - deducible
     valores[valores <= deducible] <- 0
     valores[valores > limAseg] <- limAseg
-    return(valores*coaseguro)
+
+    valores <- valores*coaseguro/100000
+    return(valores*promedioInstrumentos)
   })
   
   # 3. Construcción de M simulaciones de S
@@ -566,7 +568,7 @@ simular_bootstrap <- function(iter, lambda_poisson, alpha_pareto, beta_pareto, d
 
 # Configurar clúster para paralelización
 cl <- makeCluster(detectCores() - 1)
-clusterExport(cl, c("lambda_poisson", "alpha_pareto", "beta_pareto", "deducible", "M", "simular_S", "rpois", "rpareto", "sapply", "unlist", "limAseg", "coaseguro"))
+clusterExport(cl, c("lambda_poisson", "alpha_pareto", "beta_pareto", "deducible", "M", "simular_S", "rpois", "rpareto", "sapply", "unlist", "limAseg", "coaseguro","promedioInstrumentos"))
 
 # Ejecutar simulaciones en paralelo
 cuantiles_S <- parSapply(cl, 1:B, simular_bootstrap, lambda_poisson, alpha_pareto, beta_pareto, deducible, M)
